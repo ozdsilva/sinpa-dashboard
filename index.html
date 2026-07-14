@@ -20,7 +20,7 @@
                 <span class="text-3xl">📊</span>
                 <div>
                     <h1 class="text-xl font-bold text-white tracking-wide">SINPA Analytics</h1>
-                    <p class="text-xs text-gray-400">Dashboard de Performance e Atrasos</p>
+                    <p class="text-xs text-gray-400">Dashboard de Performance e Atrasos (09:45 às 18:00)</p>
                 </div>
             </div>
             
@@ -50,7 +50,7 @@
             </div>
         </div>
 
-        <!-- FILTROS DE DATA (ESTILO CARD DE CONTROLE) -->
+        <!-- FILTROS DE DATA -->
         <div class="bg-gray-800 p-5 rounded-lg border border-gray-700 space-y-4">
             <h3 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">Painel de Filtros Globais</h3>
             
@@ -119,9 +119,9 @@
             </div>
         </div>
 
-        <!-- GRÁFICOS - PARTE 2 (NOVOS GRÁFICOS DE ANÁLISE POR DIA DA SEMANA) -->
+        <!-- GRÁFICOS - PARTE 2 -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Gráfico de Pizza/Donut: Quantidade de atendimentos por Dia da Semana -->
+            <!-- Gráfico de Pizza/Donut: Atendimentos por Dia da Semana (Sem Sábado) -->
             <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
                 <h3 class="text-lg font-bold text-white mb-4">Atendimentos por Dia da Semana</h3>
                 <div class="h-80 relative">
@@ -129,7 +129,7 @@
                 </div>
             </div>
 
-            <!-- Gráfico de Linhas Múltiplas: Faixas Horárias mais críticas por Dia da Semana -->
+            <!-- Gráfico de Linhas Múltiplas: Faixas Horárias por Dia da Semana (Segunda a Sexta) -->
             <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
                 <h3 class="text-lg font-bold text-white mb-4">Volume por Faixa Horária x Dia da Semana</h3>
                 <div class="h-80 relative">
@@ -147,10 +147,8 @@
         let chartDiaSemanaInstance = null;
         let chartFaixaDiaSemanaInstance = null;
 
-        // Dias da semana constantes
         const DIAS_NOME = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
 
-        // Recupera URL salva no navegador para comodidade
         const savedUrl = localStorage.getItem('sinpa_saved_csv_url');
         if (savedUrl) {
             document.getElementById('csv_url_input').value = savedUrl;
@@ -247,9 +245,7 @@
             });
         }
 
-        // CONTROLADORES DOS FILTROS DINÂMICOS (UNIFICADOS)
         document.getElementById('filter_date').addEventListener('change', () => {
-            // Se o usuário escolher um dia único, limpamos o filtro de período para não bugar
             document.getElementById('filter_start_date').value = "";
             document.getElementById('filter_end_date').value = "";
             filtrarEAplicarDados();
@@ -272,7 +268,6 @@
             filtrarEAplicarDados();
         });
 
-        // FILTRA E DIRECIONA O FLUXO DE DADOS GLOBAL
         function filtrarEAplicarDados() {
             const diaUnico = document.getElementById('filter_date').value;
             const dataInicioStr = document.getElementById('filter_start_date').value;
@@ -281,22 +276,27 @@
             let dadosFiltrados = [...globalRawData];
 
             if (diaUnico !== "ALL") {
-                // Filtro por dia selecionado
                 dadosFiltrados = globalRawData.filter(item => item["Data Atendimento"] === diaUnico);
             } else if (dataInicioStr || dataFimStr) {
-                // Filtro por Intervalo de datas
                 const dataInicio = dataInicioStr ? new Date(dataInicioStr + "T00:00:00") : null;
                 const dataFim = dataFimStr ? new Date(dataFimStr + "T23:59:59") : null;
 
                 dadosFiltrados = globalRawData.filter(item => {
                     const dataItem = parseDateBR(item["Data Atendimento"]);
                     if (!dataItem) return false;
-                    
                     if (dataInicio && dataItem < dataInicio) return false;
                     if (dataFim && dataItem > dataFim) return false;
                     return true;
                 });
             }
+
+            // AJUSTE: Restrição absoluta de horário (09:45 às 18:00)
+            // 09:45 = 585 minutos | 18:00 = 1080 minutos
+            dadosFiltrados = dadosFiltrados.filter(item => {
+                const minutos = timeToMinutes(item["Hora Atendimento"]);
+                if (minutos === null) return false;
+                return minutos >= 585 && minutos <= 1080;
+            });
 
             atualizarDashboard(dadosFiltrados);
         }
@@ -314,7 +314,6 @@
             return `${h}:${m}`;
         }
 
-        // ATUALIZA OS ATENDIMENTOS E RE-RENDERIZA OS GRÁFICOS
         function atualizarDashboard(dadosFiltrados) {
             const totalAtendimentos = dadosFiltrados.length;
             
@@ -351,26 +350,12 @@
         }
 
         function gerarGraficosRanges(dados) {
-            let minTempo = 1440;
-            let maxTempo = 0;
-            let validos = 0;
+            // Limites rígidos baseados na nova regra (09:45 a 18:00)
+            let minTempo = 585; 
+            let maxTempo = 1080; 
 
-            dados.forEach(item => {
-                const t = timeToMinutes(item["Hora Atendimento"]);
-                if (t !== null) {
-                    if (t < minTempo) minTempo = t;
-                    if (t > maxTempo) maxTempo = t;
-                    validos++;
-                }
-            });
-
-            if (validos === 0) {
-                minTempo = timeToMinutes("08:00");
-                maxTempo = timeToMinutes("18:00");
-            }
-
-            const minInicio = Math.floor(minTempo / 15) * 15;
-            const minFim = Math.ceil(maxTempo / 15) * 15;
+            const minInicio = Math.floor(minTempo / 15) * 15; // 585 (09:45)
+            const minFim = Math.ceil(maxTempo / 15) * 15;    // 1080 (18:00)
             const intervalo = 15;
 
             const blocos = [];
@@ -457,53 +442,53 @@
             });
         }
 
-        // GERA OS DOIS NOVOS GRÁFICOS DE DIA DA SEMANA
         function gerarGraficosDiaSemana(dados) {
-            // Contadores por dia da semana [Dom, Seg, Ter, Qua, Qui, Sex, Sab]
+            // Contadores de dias (Dom a Sáb)
             const contagemDias = [0, 0, 0, 0, 0, 0, 0];
 
-            // Estrutura para os blocos agrupados por dia da semana e faixa horária (de 1 hora)
-            const faixasHorarias = ["08:00-10:00", "10:00-12:00", "12:00-14:00", "14:00-16:00", "16:00-18:00"];
+            // Blocos de faixas agrupados dentro de 09:45 e 18:00
+            const faixasHorarias = ["09:45-11:30", "11:30-13:15", "13:15-15:00", "15:00-16:45", "16:45-18:00"];
+            
+            // Inicializa estrutura para Segunda (1) a Sexta (5)
             const contagemFaixaDia = {
                 1: [0, 0, 0, 0, 0], // Segunda
                 2: [0, 0, 0, 0, 0], // Terça
                 3: [0, 0, 0, 0, 0], // Quarta
                 4: [0, 0, 0, 0, 0], // Quinta
-                5: [0, 0, 0, 0, 0], // Sexta
-                6: [0, 0, 0, 0, 0]  // Sábado
+                5: [0, 0, 0, 0, 0]  // Sexta
             };
 
             dados.forEach(item => {
                 const dataObj = parseDateBR(item["Data Atendimento"]);
                 if (!dataObj) return;
 
-                const diaSemana = dataObj.getDay(); // 0 a 6
+                const diaSemana = dataObj.getDay(); 
                 contagemDias[diaSemana]++;
 
                 const minutos = timeToMinutes(item["Hora Atendimento"]);
                 if (minutos === null) return;
 
-                // Mapeia para faixas horárias agrupadas (de duas em duas horas)
                 let faixaIndex = -1;
-                if (minutos >= 480 && minutos < 600) faixaIndex = 0; // 08:00 - 10:00
-                else if (minutos >= 600 && minutos < 720) faixaIndex = 1; // 10:00 - 12:00
-                else if (minutos >= 720 && minutos < 840) faixaIndex = 2; // 12:00 - 14:00
-                else if (minutos >= 840 && minutos < 960) faixaIndex = 3; // 14:00 - 16:00
-                else if (minutos >= 960 && minutos < 1080) faixaIndex = 4; // 16:00 - 18:00
+                if (minutos >= 585 && minutos < 690) faixaIndex = 0;       // 09:45 - 11:30
+                else if (minutos >= 690 && minutos < 795) faixaIndex = 1;  // 11:30 - 13:15
+                else if (minutos >= 795 && minutos < 900) faixaIndex = 2;  // 13:15 - 15:00
+                else if (minutos >= 900 && minutos < 1005) faixaIndex = 3; // 15:00 - 16:45
+                else if (minutos >= 1005 && minutos <= 1080) faixaIndex = 4; // 16:45 - 18:00
 
-                if (faixaIndex !== -1 && diaSemana >= 1 && diaSemana <= 6) {
+                // Filtra apenas Segunda (1) a Sexta (5)
+                if (faixaIndex !== -1 && diaSemana >= 1 && diaSemana <= 5) {
                     contagemFaixaDia[diaSemana][faixaIndex]++;
                 }
             });
 
-            // Filtramos Domingo pois o posto normalmente não abre aos Domingos
-            const diasFiltroLabels = DIAS_NOME.slice(1, 7); // Segunda a Sábado
-            const dadosFiltroValores = contagemDias.slice(1, 7);
+            // AJUSTE: Exibe estritamente Segunda a Sexta (remove Sábado e Domingo)
+            const diasFiltroLabels = DIAS_NOME.slice(1, 6); // ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
+            const dadosFiltroValores = contagemDias.slice(1, 6);
 
             if (chartDiaSemanaInstance) chartDiaSemanaInstance.destroy();
             if (chartFaixaDiaSemanaInstance) chartFaixaDiaSemanaInstance.destroy();
 
-            // Renderiza Novo Gráfico 3: Atendimentos por Dia da Semana (Donut)
+            // Renderiza Gráfico 3 (Atendimentos por Dia da Semana)
             const ctxDiaSemana = document.getElementById('chart_dia_semana').getContext('2d');
             chartDiaSemanaInstance = new Chart(ctxDiaSemana, {
                 type: 'doughnut',
@@ -516,8 +501,7 @@
                             '#10b981', // Terça - Verde
                             '#f59e0b', // Quarta - Amarelo
                             '#ec4899', // Quinta - Rosa
-                            '#8b5cf6', // Sexta - Roxo
-                            '#6b7280'  // Sábado - Cinza
+                            '#8b5cf6'  // Sexta - Roxo
                         ],
                         borderWidth: 1,
                         borderColor: '#1f2937'
@@ -535,7 +519,7 @@
                 }
             });
 
-            // Renderiza Novo Gráfico 4: Volume por Faixa Horária x Dia da Semana (Linhas Múltiplas)
+            // Renderiza Gráfico 4 (Segunda a Sexta mapeados de ponta a ponta)
             const ctxFaixaDiaSemana = document.getElementById('chart_faixa_dia_semana').getContext('2d');
             chartFaixaDiaSemanaInstance = new Chart(ctxFaixaDiaSemana, {
                 type: 'line',
@@ -550,9 +534,23 @@
                             tension: 0.2
                         },
                         {
+                            label: 'Terça-feira',
+                            data: contagemFaixaDia[2],
+                            borderColor: '#10b981',
+                            backgroundColor: 'transparent',
+                            tension: 0.2
+                        },
+                        {
                             label: 'Quarta-feira',
                             data: contagemFaixaDia[3],
                             borderColor: '#f59e0b',
+                            backgroundColor: 'transparent',
+                            tension: 0.2
+                        },
+                        {
+                            label: 'Quinta-feira',
+                            data: contagemFaixaDia[4],
+                            borderColor: '#ec4899',
                             backgroundColor: 'transparent',
                             tension: 0.2
                         },

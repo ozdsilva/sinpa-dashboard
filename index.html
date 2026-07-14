@@ -4,27 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard de Atendimentos - SINPA</title>
-    <!-- Tailwind CSS para estilização -->
+    <!-- Tailwind CSS para estilização rápida e moderna -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js para os gráficos -->
+    <!-- Chart.js para renderização dos gráficos -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- PapaParse para ler o CSV do Google Sheets de forma robusta -->
+    <!-- PapaParse para ler e converter o CSV do Google Sheets -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
 <body class="bg-gray-900 text-gray-100 font-sans min-h-screen">
 
-    <!-- BARRA SUPERIOR -->
+    <!-- BARRA SUPERIOR (HEADER) -->
     <header class="bg-gray-800 border-b border-gray-700 py-4 px-6 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
             <div class="flex items-center gap-3">
                 <span class="text-3xl">📊</span>
                 <div>
                     <h1 class="text-xl font-bold text-white tracking-wide">SINPA Analytics</h1>
-                    <p class="text-xs text-gray-400">Dashboard de Performance e Atrasos (09:45 às 18:00)</p>
+                    <p class="text-xs text-gray-400">Dashboard de Performance e Atrasos (Regra 15 min)</p>
                 </div>
             </div>
             
-            <!-- Entrada do Link do Google Sheets -->
+            <!-- Campo de entrada para o Link do Google Sheets CSV -->
             <div class="flex w-full md:w-auto items-center gap-2">
                 <input type="text" id="csv_url_input" placeholder="Cole aqui o link do CSV Publicado na Web" 
                        class="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-96">
@@ -37,7 +37,7 @@
 
     <main class="max-w-7xl mx-auto p-6 space-y-6">
 
-        <!-- ALERTA DE CONFIGURAÇÃO INICIAL -->
+        <!-- ALERTA DE CONFIGURAÇÃO INICIAL (Oculto após o primeiro carregamento) -->
         <div id="setup_alert" class="bg-blue-900/40 border border-blue-700 text-blue-200 p-4 rounded-lg flex items-start gap-3">
             <span class="text-xl">💡</span>
             <div>
@@ -50,12 +50,12 @@
             </div>
         </div>
 
-        <!-- FILTROS DE DATA -->
+        <!-- PAINEL DE FILTROS DE DATA -->
         <div class="bg-gray-800 p-5 rounded-lg border border-gray-700 space-y-4">
             <h3 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">Painel de Filtros Globais</h3>
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <!-- Filtro de Dia Único -->
+                <!-- Filtro de Dia Único (Dropdown) -->
                 <div class="flex flex-col gap-1.5">
                     <label for="filter_date" class="text-xs font-medium text-gray-400">Filtrar por Dia Único:</label>
                     <select id="filter_date" class="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full">
@@ -63,13 +63,13 @@
                     </select>
                 </div>
 
-                <!-- Filtro de Intervalo (Início) -->
+                <!-- Filtro de Intervalo (Data Inicial) -->
                 <div class="flex flex-col gap-1.5">
                     <label for="filter_start_date" class="text-xs font-medium text-gray-400">Data Inicial (Período):</label>
                     <input type="date" id="filter_start_date" class="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full">
                 </div>
 
-                <!-- Filtro de Intervalo (Fim) -->
+                <!-- Filtro de Intervalo (Data Final + Botão Limpar) -->
                 <div class="flex flex-col gap-1.5 flex-1">
                     <label for="filter_end_date" class="text-xs font-medium text-gray-400">Data Final (Período):</label>
                     <div class="flex gap-2">
@@ -80,7 +80,7 @@
             </div>
         </div>
 
-        <!-- CARDS DE METRICAS PRINCIPAIS -->
+        <!-- CARDS DE METRICAS PRINCIPAIS (KPIs) -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
                 <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Total de Atendimentos</p>
@@ -88,19 +88,22 @@
             </div>
             <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
                 <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Média Geral de Atraso</p>
+                <!-- Baseado na regra de tolerância de 15 min -->
                 <p id="kpi_media" class="text-3xl font-bold text-white mt-2">-</p>
             </div>
             <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
                 <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">No Horário ou Adiantados</p>
+                <!-- Atendidos em até 15 min após o agendamento -->
                 <p id="kpi_pontuais" class="text-3xl font-bold text-green-400 mt-2">-</p>
             </div>
             <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
                 <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Atendimentos com Atraso</p>
+                <!-- Atendidos com mais de 15 min de atraso -->
                 <p id="kpi_atrasados" class="text-3xl font-bold text-red-400 mt-2">-</p>
             </div>
         </div>
 
-        <!-- GRÁFICOS - PARTE 1 -->
+        <!-- SEÇÃO DE GRÁFICOS - LINHA E BARRA (ANÁLISE INTRADIA) -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- Gráfico de Linha: Média de Atraso por Range -->
             <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
@@ -119,9 +122,9 @@
             </div>
         </div>
 
-        <!-- GRÁFICOS - PARTE 2 -->
+        <!-- SEÇÃO DE GRÁFICOS - PIZZA E LINHAS MÚLTIPLAS (ANÁLISE SEMANAL) -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Gráfico de Pizza/Donut: Atendimentos por Dia da Semana (Sem Sábado) -->
+            <!-- Gráfico de Pizza/Donut: Atendimentos por Dia da Semana (Seg a Sex) -->
             <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
                 <h3 class="text-lg font-bold text-white mb-4">Atendimentos por Dia da Semana</h3>
                 <div class="h-80 relative">
@@ -129,7 +132,7 @@
                 </div>
             </div>
 
-            <!-- Gráfico de Linhas Múltiplas: Faixas Horárias por Dia da Semana (Segunda a Sexta) -->
+            <!-- Gráfico de Linhas Múltiplas: Comparação de Volume x Horário por Dia da Semana -->
             <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
                 <h3 class="text-lg font-bold text-white mb-4">Volume por Faixa Horária x Dia da Semana</h3>
                 <div class="h-80 relative">
@@ -140,64 +143,77 @@
 
     </main>
 
+    <!-- JAVASCRIPT: LÓGICA E PROCESSAMENTO DE DADOS -->
     <script>
-        let globalRawData = [];
-        let chartAtrasosInstance = null;
-        let chartVolumeInstance = null;
-        let chartDiaSemanaInstance = null;
-        let chartFaixaDiaSemanaInstance = null;
+        // --- VARIÁVEIS GLOBAIS E CONFIGURAÇÕES ---
+        let globalRawData = []; // Armazena todos os dados brutos lidos do CSV
+        let chartAtrasosInstance = null; // Instância do gráfico de linha de atrasos
+        let chartVolumeInstance = null;   // Instância do gráfico de barras de volume
+        let chartDiaSemanaInstance = null; // Instância do gráfico de pizza de dias da semana
+        let chartFaixaDiaSemanaInstance = null; // Instância do gráfico de linhas múltiplas semanais
 
         const DIAS_NOME = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
 
+        // --- INICIALIZAÇÃO E CARREGAMENTO DE DADOS SALVOS ---
+        // Recupera a URL do CSV salva no navegador (localStorage) para conveniência do usuário
         const savedUrl = localStorage.getItem('sinpa_saved_csv_url');
         if (savedUrl) {
             document.getElementById('csv_url_input').value = savedUrl;
-            document.getElementById('setup_alert').classList.add('hidden');
+            document.getElementById('setup_alert').classList.add('hidden'); // Oculta o alerta de ajuda
             carregarDados(savedUrl);
         }
 
+        // Evento de clique no botão "Atualizar Dados"
         document.getElementById('btn_load').addEventListener('click', () => {
             const url = document.getElementById('csv_url_input').value.trim();
             if (!url) {
-                alert("Por favor, cole um link válido.");
+                alert("Por favor, cole um link válido da planilha publicada como CSV.");
                 return;
             }
+            // Salva a nova URL no navegador para o próximo acesso
             localStorage.setItem('sinpa_saved_csv_url', url);
             document.getElementById('setup_alert').classList.add('hidden');
             carregarDados(url);
         });
 
+        // Função para carregar e fazer o parse dos dados do CSV
         function carregarDados(url) {
             let finalUrl = url;
+            // Garante que o link publicado na web esteja no formato de exportação CSV direta
             if (url.includes('pub?output=csv')) {
                 finalUrl = url.replace('pub?output=csv', 'pub?gid=0&single=true&output=csv');
             }
             
+            // Adiciona um "cache buster" (t=timestamp) para forçar o download da versão mais recente da planilha
             const cacheBusterUrl = finalUrl + (finalUrl.includes('?') ? '&' : '?') + 't=' + new Date().getTime();
 
+            // Usa a biblioteca PapaParse para baixar e converter o CSV em JSON
             Papa.parse(cacheBusterUrl, {
                 download: true,
-                header: true,
-                skipEmptyLines: true,
+                header: true, // Usa a primeira linha como nomes das colunas
+                skipEmptyLines: true, // Ignora linhas vazias
                 complete: function(results) {
+                    // Verificação de segurança: checa se os dados vieram vazios ou sem o cabeçalho esperado
                     if (!results.data || results.data.length === 0 || !results.data[0]["Data Atendimento"]) {
-                        console.log("Tentando leitura alternativa por falha de cabeçalho...");
+                        console.log("Falha estrutural ou planilha vazia. Tentando mapeamento manual...");
                         tentarLeituraAlternativa(results.data);
                         return;
                     }
-                    globalRawData = results.data;
-                    popularFiltroDeDatas(globalRawData);
-                    filtrarEAplicarDados();
+                    globalRawData = results.data; // Armazena os dados brutos globalmente
+                    popularFiltroDeDatas(globalRawData); // Preenche o dropdown de datas
+                    filtrarEAplicarDados(); // Aplica filtros operacionais e renderiza o dashboard
                 },
                 error: function(err) {
-                    alert("Erro ao ler os dados da planilha. Verifique se publicou corretamente como CSV.");
+                    alert("Erro crítico ao tentar ler os dados da planilha. Verifique se ela foi publicada corretamente na web como .csv.");
                     console.error(err);
                 }
             });
         }
 
+        // Função de contingência caso o PapaParse falhe em identificar os cabeçalhos das colunas
         function tentarLeituraAlternativa(data) {
             if (data && data.length > 0) {
+                // Força o mapeamento baseado na ordem esperada das colunas (Nome, Data Atend, Hora Atend, Protocolo...)
                 globalRawData = data.map(row => {
                     const chaves = Object.keys(row);
                     return {
@@ -214,29 +230,52 @@
                 popularFiltroDeDatas(globalRawData);
                 filtrarEAplicarDados();
             } else {
-                alert("A planilha parece não conter nenhum dado ainda.");
+                alert("A planilha parece estar vazia ou não contém dados válidos.");
             }
         }
 
+        // --- FUNÇÕES AUXILIARES DE PARSING E CONVERSÃO DE TEMPO ---
+        
+        // Converte data no formato brasileiro "DD/MM/AAAA" para um objeto Date do JS
         function parseDateBR(str) {
             if (!str) return null;
             const partes = str.split('/');
             if (partes.length !== 3) return null;
+            // new Date(ano, mesIndex [0-11], dia)
             return new Date(partes[2], partes[1] - 1, partes[0]);
         }
 
+        // Converte string de hora "HH:MM" para minutos totais desde 00:00 (útil para cálculos)
+        function timeToMinutes(timeStr) {
+            if (!timeStr || !timeStr.includes(':')) return null;
+            const [h, m] = timeStr.split(':').map(Number);
+            if (isNaN(h) || isNaN(m)) return null;
+            return (h * 60) + m;
+        }
+
+        // Converte minutos totais de volta para o formato de string "HH:MM"
+        function minutesToTime(totalMinutes) {
+            const h = String(Math.floor(totalMinutes / 60)).padStart(2, '0');
+            const m = String(totalMinutes % 60).padStart(2, '0');
+            return `${h}:${m}`;
+        }
+
+        // Preenche o elemento <select> (dropdown) com todas as datas únicas e ordenadas da planilha
         function popularFiltroDeDatas(data) {
             const select = document.getElementById('filter_date');
             select.innerHTML = '<option value="ALL">Todas as Datas</option>';
             
+            // Filtra valores nulos e cria uma lista de datas únicas (Set)
             const datasUnicas = [...new Set(data.map(item => item["Data Atendimento"]).filter(Boolean))];
             
+            // Ordena cronologicamente usando a função parseDateBR
             datasUnicas.sort((a, b) => {
                 const dA = parseDateBR(a);
                 const dB = parseDateBR(b);
                 return (dA && dB) ? dA - dB : 0;
             });
             
+            // Adiciona cada data como uma opção no dropdown
             datasUnicas.forEach(d => {
                 const opt = document.createElement('option');
                 opt.value = d;
@@ -245,13 +284,19 @@
             });
         }
 
+        // --- GESTÃO DINÂMICA DE FILTROS ---
+        
+        // Eventos para o filtro de "Dia Único" (Dropdown)
         document.getElementById('filter_date').addEventListener('change', () => {
+            // Se o usuário escolher um dia específico, limpa os inputs do filtro de período
             document.getElementById('filter_start_date').value = "";
             document.getElementById('filter_end_date').value = "";
             filtrarEAplicarDados();
         });
 
+        // Eventos para os inputs de data do filtro de "Período"
         document.getElementById('filter_start_date').addEventListener('change', () => {
+            // Se começar a preencher o período, reseta o dropdown de dia único para "Todas as Datas"
             document.getElementById('filter_date').value = "ALL";
             filtrarEAplicarDados();
         });
@@ -261,6 +306,7 @@
             filtrarEAplicarDados();
         });
 
+        // Evento para o botão "Limpar" do filtro de período
         document.getElementById('btn_clear_period').addEventListener('click', () => {
             document.getElementById('filter_start_date').value = "";
             document.getElementById('filter_end_date').value = "";
@@ -268,143 +314,166 @@
             filtrarEAplicarDados();
         });
 
+        // Função centralizadora que lê o estado dos filtros (data e horário operacional) e cria o subconjunto de dados
         function filtrarEAplicarDados() {
             const diaUnico = document.getElementById('filter_date').value;
             const dataInicioStr = document.getElementById('filter_start_date').value;
             const dataFimStr = document.getElementById('filter_end_date').value;
 
-            let dadosFiltrados = [...globalRawData];
+            let dadosFiltrados = [...globalRawData]; // Começa com uma cópia de todos os dados
 
+            // 1. Aplicação dos filtros de DATA
             if (diaUnico !== "ALL") {
+                // Filtro para um único dia específico
                 dadosFiltrados = globalRawData.filter(item => item["Data Atendimento"] === diaUnico);
             } else if (dataInicioStr || dataFimStr) {
+                // Filtro para um intervalo de datas (Período)
                 const dataInicio = dataInicioStr ? new Date(dataInicioStr + "T00:00:00") : null;
                 const dataFim = dataFimStr ? new Date(dataFimStr + "T23:59:59") : null;
 
                 dadosFiltrados = globalRawData.filter(item => {
                     const dataItem = parseDateBR(item["Data Atendimento"]);
                     if (!dataItem) return false;
+                    
                     if (dataInicio && dataItem < dataInicio) return false;
                     if (dataFim && dataItem > dataFim) return false;
                     return true;
                 });
             }
 
-            // AJUSTE: Restrição absoluta de horário (09:45 às 18:00)
-            // 09:45 = 585 minutos | 18:00 = 1080 minutos
+            // 2. Aplicação do filtro operacional obrigatório de HORÁRIO (09:45 às 18:00)
+            // 09:45 = 585 minutos totais | 18:00 = 1080 minutos totais
             dadosFiltrados = dadosFiltrados.filter(item => {
                 const minutos = timeToMinutes(item["Hora Atendimento"]);
+                // Ignora registros sem horário ou fora da janela operacional do posto
                 if (minutos === null) return false;
                 return minutos >= 585 && minutos <= 1080;
             });
 
+            // Envia o subconjunto final de dados para atualizar o dashboard
             atualizarDashboard(dadosFiltrados);
         }
 
-        function timeToMinutes(timeStr) {
-            if (!timeStr || !timeStr.includes(':')) return null;
-            const [h, m] = timeStr.split(':').map(Number);
-            if (isNaN(h) || isNaN(m)) return null;
-            return (h * 60) + m;
-        }
-
-        function minutesToTime(totalMinutes) {
-            const h = String(Math.floor(totalMinutes / 60)).padStart(2, '0');
-            const m = String(totalMinutes % 60).padStart(2, '0');
-            return `${h}:${m}`;
-        }
-
+        // --- ATUALIZAÇÃO DOS KPIs E GERAÇÃO DOS GRÁFICOS (REATIVIDADE) ---
+        
+        // Função que calcula as métricas principais e dispara o redesenho dos gráficos baseada nos dados filtrados
         function atualizarDashboard(dadosFiltrados) {
             const totalAtendimentos = dadosFiltrados.length;
             
+            // Separa apenas os registros que possuem um valor de diferença válido (numérico)
             const registrosComDiferenca = dadosFiltrados.filter(item => {
                 const dif = item["Diferença (Minutos)"];
                 return dif && dif !== "-";
             });
 
-            let somaAtrasos = 0;
+            // Variáveis acumuladoras para os cálculos dos KPIs
+            let somaAtrasosAcumulados = 0; // Soma apenas o tempo que exceder os 15 min de tolerância
             let qtdPontuaisOuAdiantados = 0;
             let qtdAtrasados = 0;
 
             registrosComDiferenca.forEach(item => {
-                const diff = Number(item["Diferença (Minutos)"]);
-                somaAtrasos += diff;
-                if (diff > 0) {
-                    qtdAtrasados++;
-                } else {
+                const diffMinutos = Number(item["Diferença (Minutos)"]);
+                
+                // --- APLICAÇÃO DA REGRA DE NEGÓCIO (Tolerância de 15 minutos) ---
+                if (diffMinutos <= 15) {
+                    // Até 15 min de diferença é considerado dentro do horário / adiantado
                     qtdPontuaisOuAdiantados++;
+                    // O atraso contabilizado para este registro é considerado 0 (desconsiderado da conta)
+                } else {
+                    // Passou de 15 min é considerado um atraso operacional
+                    qtdAtrasados++;
+                    somaAtrasosAcumulados += diffMinutos; // Acumula o tempo total de atraso para a média real
                 }
             });
 
+            // Média Geral de Atraso (contando apenas os atrasos reais > 15 min, desconsiderando os $\le 15$ min)
             const mediaAtraso = registrosComDiferenca.length > 0 
-                ? (somaAtrasos / registrosComDiferenca.length).toFixed(1) + " min" 
+                ? (somaAtrasosAcumulados / registrosComDiferenca.length).toFixed(1) + " min" 
                 : "0 min";
 
+            // Atualiza os valores na interface (DOM)
             document.getElementById('kpi_total').textContent = totalAtendimentos;
             document.getElementById('kpi_media').textContent = mediaAtraso;
             document.getElementById('kpi_pontuais').textContent = qtdPontuaisOuAdiantados;
             document.getElementById('kpi_atrasados').textContent = qtdAtrasados;
 
-            gerarGraficosRanges(dadosFiltrados);
-            gerarGraficosDiaSemana(dadosFiltrados);
+            // Dispara as funções para gerar os gráficos
+            gerarGraficosRanges(dadosFiltrados); // Gráficos intradia (Linha e Barra)
+            gerarGraficosDiaSemana(dadosFiltrados); // Gráficos semanais (Pizza e Comparativo)
         }
 
+        // --- GERAÇÃO DOS GRÁFICOS INTRADIA (Faixas de 15 min) ---
+        
         function gerarGraficosRanges(dados) {
-            // Limites rígidos baseados na nova regra (09:45 a 18:00)
-            let minTempo = 585; 
-            let maxTempo = 1080; 
+            // Define os limites operacionais rígidos baseados na regra (09:45 a 18:00)
+            let minTempoOperaional = 585;  // 09:45 em minutos
+            let maxTempoOperaional = 1080; // 18:00 em minutos
 
-            const minInicio = Math.floor(minTempo / 15) * 15; // 585 (09:45)
-            const minFim = Math.ceil(maxTempo / 15) * 15;    // 1080 (18:00)
-            const intervalo = 15;
+            // Define o início e fim dos blocos arredondando para faixas exatas de 15 min
+            const minInicioBlocos = Math.floor(minTempoOperaional / 15) * 15; // 585 (09:45)
+            const minFimBlocos = Math.ceil(maxTempoOperaional / 15) * 15;    // 1080 (18:00)
+            const intervaloBloco = 15;
 
-            const blocos = [];
-            for (let t = minInicio; t < minFim; t += intervalo) {
-                blocos.push({
+            // Cria a estrutura vazia de blocos de 15 minutos
+            const blocosIndices = [];
+            for (let t = minInicioBlocos; t < minFimBlocos; t += intervaloBloco) {
+                blocosIndices.push({
                     inicio: t,
-                    fim: t + intervalo,
-                    label: `${minutesToTime(t)} - ${minutesToTime(t + intervalo)}`,
-                    somaDiferenca: 0,
-                    qtdDiferenca: 0,
-                    qtdTotal: 0
+                    fim: t + intervaloBloco,
+                    label: `${minutesToTime(t)} - ${minutesToTime(t + intervaloBloco)}`, // Ex: "09:45 - 10:00"
+                    somaDiferenca: 0, // Soma de atrasos que passaram da tolerância
+                    qtdDiferencaValid: 0, // Contador de registros com diferença válida naquele bloco
+                    qtdTotal: 0 // Volume total de atendimentos naquele bloco
                 });
             }
 
+            // Distribui os atendimentos filtrados nos respectivos blocos horários
             dados.forEach(item => {
-                const minAtend = timeToMinutes(item["Hora Atendimento"]);
-                if (minAtend === null) return;
+                const minutosAtend = timeToMinutes(item["Hora Atendimento"]);
+                if (minutosAtend === null) return;
 
-                const bloco = blocos.find(b => minAtend >= b.inicio && minAtend < b.fim);
-                if (bloco) {
-                    bloco.qtdTotal++;
-                    const diff = item["Diferença (Minutos)"];
-                    if (diff && diff !== "-") {
-                        bloco.somaDiferenca += Number(diff);
-                        bloco.qtdDiferenca++;
+                // Encontra o bloco correto para este atendimento
+                const blocoCorreto = blocosIndices.find(b => minutosAtend >= b.inicio && minutosAtend < b.fim);
+                if (blocoCorreto) {
+                    blocoCorreto.qtdTotal++; // Incrementa volume total do bloco
+                    const diffStr = item["Diferença (Minutos)"];
+                    
+                    if (diffStr && diffStr !== "-") {
+                        const valorDiff = Number(diffStr);
+                        // --- APLICAÇÃO DA REGRA DE NEGÓCIO (Tolerância de 15 minutos no gráfico) ---
+                        // Se a diferença bruta for $\le 15$ min, tratamos como 0 de atraso para o cálculo da média real
+                        const atrasoConsiderado = valorDiff <= 15 ? 0 : valorDiff;
+                        
+                        blocoCorreto.somaDiferenca += atrasoConsiderado;
+                        blocoCorreto.qtdDiferencaValid++;
                     }
                 }
             });
 
-            const labels = blocos.map(b => b.label);
-            const mediasAtraso = blocos.map(b => b.qtdDiferenca > 0 ? (b.somaDiferenca / b.qtdDiferenca).toFixed(1) : 0);
-            const volumesAtendimento = blocos.map(b => b.qtdTotal);
+            // Prepara os arrays finais para o Chart.js
+            const labelsGraficoIntradia = blocosIndices.map(b => b.label);
+            // Calcula a média real (atrasos > 15 min), desconsiderando (tratando como 0) os atrasos $\le 15$ min
+            const mediasAtrasoReais = blocosIndices.map(b => b.qtdDiferencaValid > 0 ? (b.somaDiferenca / b.qtdDiferencaValid).toFixed(1) : 0);
+            const volumesAtendimentoPorBloco = blocosIndices.map(b => b.qtdTotal);
 
+            // Destrói as instâncias anteriores dos gráficos antes de renderizar novas para evitar bugs de hover/flickering
             if (chartAtrasosInstance) chartAtrasosInstance.destroy();
             if (chartVolumeInstance) chartVolumeInstance.destroy();
 
+            // Renderiza o Gráfico de Linha: Média de Atraso Operacional
             const ctxAtraso = document.getElementById('chart_atrasos').getContext('2d');
             chartAtrasosInstance = new Chart(ctxAtraso, {
                 type: 'line',
                 data: {
-                    labels: labels,
+                    labels: labelsGraficoIntradia,
                     datasets: [{
-                        label: 'Média de Atraso (Minutos)',
-                        data: mediasAtraso,
-                        borderColor: '#ef4444',
+                        label: 'Média de Atraso Operacional (minutos, desconsiderando tolerância de 15 min)',
+                        data: mediasAtrasoReais,
+                        borderColor: '#ef4444', // Vermelho (Tailwind - red-500)
                         backgroundColor: 'rgba(239, 68, 68, 0.1)',
                         borderWidth: 2,
-                        tension: 0.3,
-                        fill: true
+                        tension: 0.3, // Curvatura da linha
+                        fill: true // Preenchimento abaixo da linha
                     }]
                 },
                 options: {
@@ -418,15 +487,16 @@
                 }
             });
 
+            // Renderiza o Gráfico de Barra: Volume de Atendimentos
             const ctxVolume = document.getElementById('chart_volume').getContext('2d');
             chartVolumeInstance = new Chart(ctxVolume, {
                 type: 'bar',
                 data: {
-                    labels: labels,
+                    labels: labelsGraficoIntradia,
                     datasets: [{
                         label: 'Volume de Atendimentos',
-                        data: volumesAtendimento,
-                        backgroundColor: '#3b82f6',
+                        data: volumesAtendimentoPorBloco,
+                        backgroundColor: '#3b82f6', // Azul (Tailwind - blue-500)
                         borderRadius: 4
                     }]
                 },
@@ -442,15 +512,17 @@
             });
         }
 
+        // --- GERAÇÃO DOS GRÁFICOS DE DIA DA SEMANA (Pizza e Linhas Múltiplas) ---
+        
         function gerarGraficosDiaSemana(dados) {
-            // Contadores de dias (Dom a Sáb)
-            const contagemDias = [0, 0, 0, 0, 0, 0, 0];
+            // Contadores de dias (Dom a Sáb) [0, 1, 2, 3, 4, 5, 6]
+            const contagemAtendimentosPorDiaDaSemana = [0, 0, 0, 0, 0, 0, 0];
 
-            // Blocos de faixas agrupados dentro de 09:45 e 18:00
-            const faixasHorarias = ["09:45-11:30", "11:30-13:15", "13:15-15:00", "15:00-16:45", "16:45-18:00"];
+            // Blocos de faixas agrupados para o comparativo semanal
+            const faixasComparativasSemanais = ["09:45-11:30", "11:30-13:15", "13:15-15:00", "15:00-16:45", "16:45-18:00"];
             
-            // Inicializa estrutura para Segunda (1) a Sexta (5)
-            const contagemFaixaDia = {
+            // Inicializa a estrutura de contagem para cada dia útil: Segunda (1) a Sexta (5)
+            const contagemFaixaHorariaPorDiaUtil = {
                 1: [0, 0, 0, 0, 0], // Segunda
                 2: [0, 0, 0, 0, 0], // Terça
                 3: [0, 0, 0, 0, 0], // Quarta
@@ -459,43 +531,45 @@
             };
 
             dados.forEach(item => {
-                const dataObj = parseDateBR(item["Data Atendimento"]);
-                if (!dataObj) return;
+                const dataObjItem = parseDateBR(item["Data Atendimento"]);
+                if (!dataObjItem) return;
 
-                const diaSemana = dataObj.getDay(); 
-                contagemDias[diaSemana]++;
+                const diaSemanaItem = dataObjItem.getDay(); // Retorna 0 (Dom) a 6 (Sáb)
+                contagemAtendimentosPorDiaDaSemana[diaSemanaItem]++;
 
-                const minutos = timeToMinutes(item["Hora Atendimento"]);
-                if (minutos === null) return;
+                const minutosAtend = timeToMinutes(item["Hora Atendimento"]);
+                if (minutosAtend === null) return;
 
-                let faixaIndex = -1;
-                if (minutos >= 585 && minutos < 690) faixaIndex = 0;       // 09:45 - 11:30
-                else if (minutos >= 690 && minutos < 795) faixaIndex = 1;  // 11:30 - 13:15
-                else if (minutos >= 795 && minutos < 900) faixaIndex = 2;  // 13:15 - 15:00
-                else if (minutos >= 900 && minutos < 1005) faixaIndex = 3; // 15:00 - 16:45
-                else if (minutos >= 1005 && minutos <= 1080) faixaIndex = 4; // 16:45 - 18:00
+                // Mapeia o horário para uma das faixas comparativas definidas
+                let indexFaixa = -1;
+                if (minutosAtend >= 585 && minutosAtend < 690) indexFaixa = 0;       // 09:45 - 11:30
+                else if (minutosAtend >= 690 && minutosAtend < 795) indexFaixa = 1;  // 11:30 - 13:15
+                else if (minutosAtend >= 795 && minutosAtend < 900) indexFaixa = 2;  // 13:15 - 15:00
+                else if (minutosAtend >= 900 && minutosAtend < 1005) indexFaixa = 3; // 15:00 - 16:45
+                else if (minutosAtend >= 1005 && minutosAtend <= 1080) indexFaixa = 4; // 16:45 - 18:00
 
-                // Filtra apenas Segunda (1) a Sexta (5)
-                if (faixaIndex !== -1 && diaSemana >= 1 && diaSemana <= 5) {
-                    contagemFaixaDia[diaSemana][faixaIndex]++;
+                // Filtra para salvar apenas Segunda (1) a Sexta (5)
+                if (indexFaixa !== -1 && diaSemanaItem >= 1 && diaSemanaItem <= 5) {
+                    contagemFaixaHorariaPorDiaUtil[diaSemanaItem][indexFaixa]++;
                 }
             });
 
-            // AJUSTE: Exibe estritamente Segunda a Sexta (remove Sábado e Domingo)
-            const diasFiltroLabels = DIAS_NOME.slice(1, 6); // ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
-            const dadosFiltroValores = contagemDias.slice(1, 6);
+            // Prepara os dados para o gráfico de pizza: Filtra Domingo e Sábado, exibindo apenas Segunda a Sexta
+            const diasFiltroLabelsParaPizza = DIAS_NOME.slice(1, 6); // ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
+            const dadosFiltroVolumeParaPizza = contagemAtendimentosPorDiaDaSemana.slice(1, 6);
 
+            // Destrói instâncias anteriores antes de renderizar
             if (chartDiaSemanaInstance) chartDiaSemanaInstance.destroy();
             if (chartFaixaDiaSemanaInstance) chartFaixaDiaSemanaInstance.destroy();
 
-            // Renderiza Gráfico 3 (Atendimentos por Dia da Semana)
-            const ctxDiaSemana = document.getElementById('chart_dia_semana').getContext('2d');
-            chartDiaSemanaInstance = new Chart(ctxDiaSemana, {
+            // Renderiza o Gráfico de Pizza (Donut): Atendimentos por Dia da Semana (Seg a Sex)
+            const ctxDiaSemanaPizza = document.getElementById('chart_dia_semana').getContext('2d');
+            chartDiaSemanaInstance = new Chart(ctxDiaSemanaPizza, {
                 type: 'doughnut',
                 data: {
-                    labels: diasFiltroLabels,
+                    labels: diasFiltroLabelsParaPizza,
                     datasets: [{
-                        data: dadosFiltroValores,
+                        data: dadosFiltroVolumeParaPizza,
                         backgroundColor: [
                             '#3b82f6', // Segunda - Azul
                             '#10b981', // Terça - Verde
@@ -504,7 +578,7 @@
                             '#8b5cf6'  // Sexta - Roxo
                         ],
                         borderWidth: 1,
-                        borderColor: '#1f2937'
+                        borderColor: '#1f2937' // Cor da borda interna (Tailwind - gray-800)
                     }]
                 },
                 options: {
@@ -512,52 +586,52 @@
                     maintainAspectRatio: false,
                     plugins: {
                         legend: {
-                            position: 'right',
+                            position: 'right', // Legendas na direita para ganhar espaço vertical
                             labels: { color: '#9ca3af' }
                         }
                     }
                 }
             });
 
-            // Renderiza Gráfico 4 (Segunda a Sexta mapeados de ponta a ponta)
-            const ctxFaixaDiaSemana = document.getElementById('chart_faixa_dia_semana').getContext('2d');
-            chartFaixaDiaSemanaInstance = new Chart(ctxFaixaDiaSemana, {
+            // Renderiza o Gráfico de Linhas Múltiplas: Comparação de Volume x Horário por Dia da Semana
+            const ctxFaixaDiaSemanaLine = document.getElementById('chart_faixa_dia_semana').getContext('2d');
+            chartFaixaDiaSemanaInstance = new Chart(ctxFaixaDiaSemanaLine, {
                 type: 'line',
                 data: {
-                    labels: faixasHorarias,
+                    labels: faixasComparativasSemanais,
                     datasets: [
                         {
                             label: 'Segunda-feira',
-                            data: contagemFaixaDia[1],
-                            borderColor: '#3b82f6',
+                            data: contagemFaixaHorariaPorDiaUtil[1],
+                            borderColor: '#3b82f6', // Azul
                             backgroundColor: 'transparent',
                             tension: 0.2
                         },
                         {
                             label: 'Terça-feira',
-                            data: contagemFaixaDia[2],
-                            borderColor: '#10b981',
+                            data: contagemFaixaHorariaPorDiaUtil[2],
+                            borderColor: '#10b981', // Verde
                             backgroundColor: 'transparent',
                             tension: 0.2
                         },
                         {
                             label: 'Quarta-feira',
-                            data: contagemFaixaDia[3],
-                            borderColor: '#f59e0b',
+                            data: contagemFaixaHorariaPorDiaUtil[3],
+                            borderColor: '#f59e0b', // Amarelo
                             backgroundColor: 'transparent',
                             tension: 0.2
                         },
                         {
                             label: 'Quinta-feira',
-                            data: contagemFaixaDia[4],
-                            borderColor: '#ec4899',
+                            data: contagemFaixaHorariaPorDiaUtil[4],
+                            borderColor: '#ec4899', // Rosa
                             backgroundColor: 'transparent',
                             tension: 0.2
                         },
                         {
                             label: 'Sexta-feira',
-                            data: contagemFaixaDia[5],
-                            borderColor: '#8b5cf6',
+                            data: contagemFaixaDiaSemanaInstance = contagemFaixaHorariaPorDiaUtil[5],
+                            borderColor: '#8b5cf6', // Roxo
                             backgroundColor: 'transparent',
                             tension: 0.2
                         }

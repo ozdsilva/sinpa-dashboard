@@ -87,27 +87,27 @@
                 <p id="kpi_total" class="text-3xl font-bold text-white mt-2">-</p>
             </div>
             <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
-                <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Média Geral de Atraso</p>
-                <!-- Baseado na regra de tolerância de 15 min -->
+                <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Média Agendamento X Atendimento</p>
+                <!-- KPI Renomeado e revertido para a média real sem tolerância -->
                 <p id="kpi_media" class="text-3xl font-bold text-white mt-2">-</p>
             </div>
             <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
                 <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">No Horário ou Adiantados</p>
-                <!-- Atendidos em até 15 min após o agendamento -->
+                <!-- Atendidos em até 15 min após o agendamento (Regra de Negócio Mantida para este KPI) -->
                 <p id="kpi_pontuais" class="text-3xl font-bold text-green-400 mt-2">-</p>
             </div>
             <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
                 <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Atendimentos com Atraso</p>
-                <!-- Atendidos com mais de 15 min de atraso -->
+                <!-- Atendidos com mais de 15 min de atraso (Regra de Negócio Mantida para este KPI) -->
                 <p id="kpi_atrasados" class="text-3xl font-bold text-red-400 mt-2">-</p>
             </div>
         </div>
 
         <!-- SEÇÃO DE GRÁFICOS - LINHA E BARRA (ANÁLISE INTRADIA) -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Gráfico de Linha: Média de Atraso por Range -->
+            <!-- Gráfico de Linha: Média de Tempo Horário Agendado x Final do Atendimento -->
             <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
-                <h3 class="text-lg font-bold text-white mb-4">Média de Atraso por Faixa Horária (15 min)</h3>
+                <h3 class="text-lg font-bold text-white mb-4">Média de tempo horário agendado x final do atendimento (15 min)</h3>
                 <div class="h-80 relative">
                     <canvas id="chart_atrasos"></canvas>
                 </div>
@@ -366,29 +366,28 @@
                 return dif && dif !== "-";
             });
 
-            // Variáveis acumuladoras para os cálculos dos KPIs
-            let somaAtrasosAcumulados = 0; // Soma apenas o tempo que exceder os 15 min de tolerância
-            let qtdPontuaisOuAdiantados = 0;
-            let qtdAtrasados = 0;
+            // Variáveis acumuladoras
+            let somaDiferencaBruta = 0; // Usado para a Média Agendamento x Atendimento (sem tolerância)
+            let qtdPontuaisOuAdiantados = 0; // Mantém a regra de 15 min para o KPI
+            let qtdAtrasados = 0; // Mantém a regra de 15 min para o KPI
 
             registrosComDiferenca.forEach(item => {
                 const diffMinutos = Number(item["Diferença (Minutos)"]);
                 
-                // --- APLICAÇÃO DA REGRA DE NEGÓCIO (Tolerância de 15 minutos) ---
+                // Soma bruta para calcular a média de tempo agendamento x atendimento real
+                somaDiferencaBruta += diffMinutos;
+
+                // Regra de Tolerância de 15 min mantida APENAS para classificar se o atendimento foi pontual ou atrasado nos cards de KPI
                 if (diffMinutos <= 15) {
-                    // Até 15 min de diferença é considerado dentro do horário / adiantado
                     qtdPontuaisOuAdiantados++;
-                    // O atraso contabilizado para este registro é considerado 0 (desconsiderado da conta)
                 } else {
-                    // Passou de 15 min é considerado um atraso operacional
                     qtdAtrasados++;
-                    somaAtrasosAcumulados += diffMinutos; // Acumula o tempo total de atraso para a média real
                 }
             });
 
-            // Média Geral de Atraso (contando apenas os atrasos reais > 15 min, desconsiderando os $\le 15$ min)
+            // Média Geral de Atraso (Revertida para o cálculo padrão original: Agendamento x Atendimento real)
             const mediaAtraso = registrosComDiferenca.length > 0 
-                ? (somaAtrasosAcumulados / registrosComDiferenca.length).toFixed(1) + " min" 
+                ? (somaDiferencaBruta / registrosComDiferenca.length).toFixed(1) + " min" 
                 : "0 min";
 
             // Atualiza os valores na interface (DOM)
@@ -421,7 +420,7 @@
                     inicio: t,
                     fim: t + intervaloBloco,
                     label: `${minutesToTime(t)} - ${minutesToTime(t + intervaloBloco)}`, // Ex: "09:45 - 10:00"
-                    somaDiferenca: 0, // Soma de atrasos que passaram da tolerância
+                    somaDiferenca: 0, // Soma de diferença real bruta (sem tolerância)
                     qtdDiferencaValid: 0, // Contador de registros com diferença válida naquele bloco
                     qtdTotal: 0 // Volume total de atendimentos naquele bloco
                 });
@@ -440,19 +439,16 @@
                     
                     if (diffStr && diffStr !== "-") {
                         const valorDiff = Number(diffStr);
-                        // --- APLICAÇÃO DA REGRA DE NEGÓCIO (Tolerância de 15 minutos no gráfico) ---
-                        // Se a diferença bruta for $\le 15$ min, tratamos como 0 de atraso para o cálculo da média real
-                        const atrasoConsiderado = valorDiff <= 15 ? 0 : valorDiff;
-                        
-                        blocoCorreto.somaDiferenca += atrasoConsiderado;
+                        // Revertido: Considera a diferença real bruta diretamente
+                        blocoCorreto.somaDiferenca += valorDiff;
                         blocoCorreto.qtdDiferencaValid++;
                     }
                 }
             });
 
-            // Prepara os arrays finais para o Chart.js
+            // Prepara os dados finais para o Chart.js
             const labelsGraficoIntradia = blocosIndices.map(b => b.label);
-            // Calcula a média real (atrasos > 15 min), desconsiderando (tratando como 0) os atrasos $\le 15$ min
+            // Revertido: Calcula a média real sem tolerância aplicada
             const mediasAtrasoReais = blocosIndices.map(b => b.qtdDiferencaValid > 0 ? (b.somaDiferenca / b.qtdDiferencaValid).toFixed(1) : 0);
             const volumesAtendimentoPorBloco = blocosIndices.map(b => b.qtdTotal);
 
@@ -460,14 +456,14 @@
             if (chartAtrasosInstance) chartAtrasosInstance.destroy();
             if (chartVolumeInstance) chartVolumeInstance.destroy();
 
-            // Renderiza o Gráfico de Linha: Média de Atraso Operacional
+            // Renderiza o Gráfico de Linha: Média de tempo horário agendado x final do atendimento
             const ctxAtraso = document.getElementById('chart_atrasos').getContext('2d');
             chartAtrasosInstance = new Chart(ctxAtraso, {
                 type: 'line',
                 data: {
                     labels: labelsGraficoIntradia,
                     datasets: [{
-                        label: 'Média de Atraso Operacional (minutos, desconsiderando tolerância de 15 min)',
+                        label: 'Média de Atraso Bruta (minutos)',
                         data: mediasAtrasoReais,
                         borderColor: '#ef4444', // Vermelho (Tailwind - red-500)
                         backgroundColor: 'rgba(239, 68, 68, 0.1)',
@@ -630,7 +626,7 @@
                         },
                         {
                             label: 'Sexta-feira',
-                            data: contagemFaixaDiaSemanaInstance = contagemFaixaHorariaPorDiaUtil[5],
+                            data: contagemFaixaHorariaPorDiaUtil[5],
                             borderColor: '#8b5cf6', // Roxo
                             backgroundColor: 'transparent',
                             tension: 0.2

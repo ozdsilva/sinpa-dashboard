@@ -3,270 +3,582 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel de Monitoramento de Atendimento</title>
-    <!-- Chart.js para renderização dos gráficos -->
+    <title>Dashboard de Atendimentos - SINPA</title>
+    <!-- Tailwind CSS para estilização -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js para os gráficos -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f6f9;
-            margin: 0;
-            padding: 20px;
-            color: #333;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        h1 {
-            text-align: center;
-            color: #003366;
-            margin-bottom: 30px;
-        }
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .card {
-            background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            text-align: center;
-            border-top: 4px solid #003366;
-        }
-        .card h3 {
-            margin: 0 0 10px 0;
-            font-size: 0.95rem;
-            color: #666;
-            text-transform: uppercase;
-        }
-        .card .value {
-            font-size: 1.8rem;
-            font-weight: bold;
-            color: #003366;
-        }
-        .charts-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
-            gap: 20px;
-        }
-        .chart-card {
-            background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            min-height: 350px;
-        }
-        .chart-card h3 {
-            margin-top: 0;
-            color: #333;
-            border-bottom: 1px solid #eee;
-            padding-bottom: 10px;
-            font-size: 1.1rem;
-        }
-    </style>
+    <!-- PapaParse para ler o CSV do Google Sheets de forma robusta -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
-<body>
+<body class="bg-gray-900 text-gray-100 font-sans min-h-screen">
 
-<div class="container">
-    <h1>Indicadores e Análise de Atendimento</h1>
-
-    <!-- Cartões de Métricas Consolidadas -->
-    <div class="metrics-grid">
-        <div class="card">
-            <h3>Média Geral de Atraso</h3>
-            <!-- Média Agendamento x Atendimento real -->
-            <div id="media-geral-atraso" class="value">-- min</div>
+    <!-- BARRA SUPERIOR -->
+    <header class="bg-gray-800 border-b border-gray-700 py-4 px-6 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <span class="text-3xl">📊</span>
+                <div>
+                    <h1 class="text-xl font-bold text-white tracking-wide">SINPA Analytics</h1>
+                    <p class="text-xs text-gray-400">Dashboard de Performance e Atrasos (09:45 às 18:00)</p>
+                </div>
+            </div>
+            
+            <!-- Entrada do Link do Google Sheets -->
+            <div class="flex w-full md:w-auto items-center gap-2">
+                <input type="text" id="csv_url_input" placeholder="Cole aqui o link do CSV Publicado na Web" 
+                       class="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-96">
+                <button id="btn_load" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded text-sm transition-all whitespace-nowrap">
+                    Atualizar Dados
+                </button>
+            </div>
         </div>
-        <div class="card">
-            <h3>Atendidos no Horário / Adiantados</h3>
-            <!-- Considerando tolerância de até 15 minutos -->
-            <div id="pct-no-horario" class="value">--%</div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-6 space-y-6">
+
+        <!-- ALERTA DE CONFIGURAÇÃO INICIAL -->
+        <div id="setup_alert" class="bg-blue-900/40 border border-blue-700 text-blue-200 p-4 rounded-lg flex items-start gap-3">
+            <span class="text-xl">💡</span>
+            <div>
+                <h3 class="font-bold">Como conectar sua planilha do Google:</h3>
+                <ol class="list-decimal ml-5 mt-1 text-sm text-gray-300 space-y-1">
+                    <li>Na sua Google Planilha, clique em <strong>Arquivo</strong> > <strong>Compartilhar</strong> > <strong>Publicar na Web</strong>.</li>
+                    <li>Mude de "Página Web" para <strong>Valores separados por vírgula (.csv)</strong>.</li>
+                    <li>Clique em <strong>Publicar</strong>, copie o link gerado e cole no campo acima!</li>
+                </ol>
+            </div>
         </div>
-        <div class="card">
-            <h3>Atendimentos com Atraso (>15 min)</h3>
-            <div id="pct-atrasados" class="value">--%</div>
+
+        <!-- FILTROS DE DATA -->
+        <div class="bg-gray-800 p-5 rounded-lg border border-gray-700 space-y-4">
+            <h3 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">Painel de Filtros Globais</h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Filtro de Dia Único -->
+                <div class="flex flex-col gap-1.5">
+                    <label for="filter_date" class="text-xs font-medium text-gray-400">Filtrar por Dia Único:</label>
+                    <select id="filter_date" class="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full">
+                        <option value="ALL">Todas as Datas</option>
+                    </select>
+                </div>
+
+                <!-- Filtro de Intervalo (Início) -->
+                <div class="flex flex-col gap-1.5">
+                    <label for="filter_start_date" class="text-xs font-medium text-gray-400">Data Inicial (Período):</label>
+                    <input type="date" id="filter_start_date" class="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full">
+                </div>
+
+                <!-- Filtro de Intervalo (Fim) -->
+                <div class="flex flex-col gap-1.5 flex-1">
+                    <label for="filter_end_date" class="text-xs font-medium text-gray-400">Data Final (Período):</label>
+                    <div class="flex gap-2">
+                        <input type="date" id="filter_end_date" class="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full">
+                        <button id="btn_clear_period" class="bg-gray-600 hover:bg-gray-500 text-white font-semibold px-3 rounded text-sm transition-all">Limpar</button>
+                    </div>
+                </div>
+            </div>
         </div>
-    </div>
 
-    <!-- Seção de Gráficos -->
-    <div class="charts-grid">
-        <div class="chart-card">
-            <h3>Média de Atraso por Faixa Horária (15 min)</h3>
-            <canvas id="chartAtrasoFaixa"></canvas>
+        <!-- CARDS DE METRICAS PRINCIPAIS -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Total de Atendimentos</p>
+                <p id="kpi_total" class="text-3xl font-bold text-white mt-2">-</p>
+            </div>
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Média Geral de Atraso</p>
+                <p id="kpi_media" class="text-3xl font-bold text-white mt-2">-</p>
+            </div>
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">No Horário ou Adiantados</p>
+                <p id="kpi_pontuais" class="text-3xl font-bold text-green-400 mt-2">-</p>
+            </div>
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Atendimentos com Atraso</p>
+                <p id="kpi_atrasados" class="text-3xl font-bold text-red-400 mt-2">-</p>
+            </div>
         </div>
-        <div class="chart-card">
-            <h3>Volume de Atendimentos por Status</h3>
-            <canvas id="chartStatusAtendimento"></canvas>
+
+        <!-- GRÁFICOS - PARTE 1 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Gráfico de Linha: Média de Atraso por Range -->
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                <h3 class="text-lg font-bold text-white mb-4">Média de Atraso por Faixa Horária (15 min)</h3>
+                <div class="h-80 relative">
+                    <canvas id="chart_atrasos"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráfico de Barras: Volume de Atendimentos por Range -->
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                <h3 class="text-lg font-bold text-white mb-4">Volume de Atendimentos por Faixa Horária</h3>
+                <div class="h-80 relative">
+                    <canvas id="chart_volume"></canvas>
+                </div>
+            </div>
         </div>
-    </div>
-</div>
 
-<script>
-    // --- DADOS DE EXEMPLO (Substitua pela integração de dados do seu sistema) ---
-    const dadosAtendimentos = [
-        { requisitante: "Nathalia", agendado: "17:10", inicioAtendimento: "17:37", fimAtendimento: "17:50" },
-        { requisitante: "Sabrina",  agendado: "17:05", inicioAtendimento: "17:39", fimAtendimento: "17:55" },
-        { requisitante: "Andrea",   agendado: "17:30", inicioAtendimento: "17:42", fimAtendimento: "17:52" },
-        { requisitante: "Lucca",    agendado: "17:20", inicioAtendimento: "17:42", fimAtendimento: "17:58" },
-        { requisitante: "Adriana",  agendado: "17:15", inicioAtendimento: "17:44", fimAtendimento: "17:59" },
-        { requisitante: "Victor",   agendado: "17:25", inicioAtendimento: "17:47", fimAtendimento: "18:05" },
-        { requisitante: "Thiago",   agendado: "18:00", inicioAtendimento: "18:08", fimAtendimento: "18:18" } // Atendido em 8 min (Dentro do padrão de 15 min)
-    ];
+        <!-- GRÁFICOS - PARTE 2 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Gráfico de Pizza/Donut: Atendimentos por Dia da Semana (Sem Sábado) -->
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                <h3 class="text-lg font-bold text-white mb-4">Atendimentos por Dia da Semana</h3>
+                <div class="h-80 relative">
+                    <canvas id="chart_dia_semana"></canvas>
+                </div>
+            </div>
 
-    // --- FUNÇÕES UTILITÁRIAS DE TEMPO ---
-    
-    // Converte "HH:MM" para minutos inteiros desde o início do dia
-    function parseHora(strHora) {
-        if (!strHora) return 0;
-        const [horas, minutos] = strHora.split(':').map(Number);
-        return (horas * 60) + minutos;
-    }
+            <!-- Gráfico de Linhas Múltiplas: Faixas Horárias por Dia da Semana (Segunda a Sexta) -->
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                <h3 class="text-lg font-bold text-white mb-4">Volume por Faixa Horária x Dia da Semana</h3>
+                <div class="h-80 relative">
+                    <canvas id="chart_faixa_dia_semana"></canvas>
+                </div>
+            </div>
+        </div>
 
-    // Converte minutos de volta para o formato legível
-    function formatarMinutos(minutosTotais) {
-        const sinal = minutosTotais < 0 ? "-" : "";
-        const minAbsoluto = Math.round(Math.abs(minutosTotais));
-        const horas = Math.floor(minAbsoluto / 60);
-        const minutos = minAbsoluto % 60;
+    </main>
 
-        if (horas > 0) {
-            return `${sinal}${horas}h ${minutos}min`;
+    <script>
+        let globalRawData = [];
+        let chartAtrasosInstance = null;
+        let chartVolumeInstance = null;
+        let chartDiaSemanaInstance = null;
+        let chartFaixaDiaSemanaInstance = null;
+
+        const DIAS_NOME = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
+
+        const savedUrl = localStorage.getItem('sinpa_saved_csv_url');
+        if (savedUrl) {
+            document.getElementById('csv_url_input').value = savedUrl;
+            document.getElementById('setup_alert').classList.add('hidden');
+            carregarDados(savedUrl);
         }
-        return `${sinal}${minutos} min`;
-    }
 
-    // Arredonda o horário de agendamento para faixas de 15 minutos (ex: 17:10 -> 17:00, 17:15 -> 17:15)
-    function obterFaixa15Min(horario) {
-        const [horas, minutos] = horario.split(':').map(Number);
-        const minutosArredondados = Math.floor(minutos / 15) * 15;
-        return `${String(horas).padStart(2, '0')}:${String(minutosArredondados).padStart(2, '0')}`;
-    }
+        document.getElementById('btn_load').addEventListener('click', () => {
+            const url = document.getElementById('csv_url_input').value.trim();
+            if (!url) {
+                alert("Por favor, cole um link válido.");
+                return;
+            }
+            localStorage.setItem('sinpa_saved_csv_url', url);
+            document.getElementById('setup_alert').classList.add('hidden');
+            carregarDados(url);
+        });
 
-    // --- PROCESSAMENTO DAS MÉTRICAS ---
-    
-    function processarMétricas(atendimentos) {
-        let somaAtrasoGeral = 0; // Agendamento x Atendimento Inicial
-        let totalAtendidos = atendimentos.length;
-        
-        let noHorarioOuAdiantados = 0;
-        let atrasadosMais15Min = 0;
-
-        atendimentos.forEach(at => {
-            const agendado = parseHora(at.agendado);
-            const atendimento = parseHora(at.inicioAtendimento);
+        function carregarDados(url) {
+            let finalUrl = url;
+            if (url.includes('pub?output=csv')) {
+                finalUrl = url.replace('pub?output=csv', 'pub?gid=0&single=true&output=csv');
+            }
             
-            const diferenca = atendimento - agendado;
-            somaAtrasoGeral += diferenca;
+            const cacheBusterUrl = finalUrl + (finalUrl.includes('?') ? '&' : '?') + 't=' + new Date().getTime();
 
-            // Nova Regra de Classificação (Tolerância de 15 minutos)
-            if (diferenca <= 15) {
-                noHorarioOuAdiantados++;
+            Papa.parse(cacheBusterUrl, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    if (!results.data || results.data.length === 0 || !results.data[0]["Data Atendimento"]) {
+                        console.log("Tentando leitura alternativa por falha de cabeçalho...");
+                        tentarLeituraAlternativa(results.data);
+                        return;
+                    }
+                    globalRawData = results.data;
+                    popularFiltroDeDatas(globalRawData);
+                    filtrarEAplicarDados();
+                },
+                error: function(err) {
+                    alert("Erro ao ler os dados da planilha. Verifique se publicou corretamente como CSV.");
+                    console.error(err);
+                }
+            });
+        }
+
+        function tentarLeituraAlternativa(data) {
+            if (data && data.length > 0) {
+                globalRawData = data.map(row => {
+                    const chaves = Object.keys(row);
+                    return {
+                        "Nome": row[chaves[0]] || "",
+                        "Data Atendimento": row[chaves[1]] || "",
+                        "Hora Atendimento": row[chaves[2]] || "",
+                        "Protocolo": row[chaves[3]] || "",
+                        "Data Agendamento": row[chaves[4]] || "",
+                        "Hora Agendamento": row[chaves[5]] || "",
+                        "Status": row[chaves[6]] || "",
+                        "Diferença (Minutos)": row[chaves[7]] || "-"
+                    };
+                });
+                popularFiltroDeDatas(globalRawData);
+                filtrarEAplicarDados();
             } else {
-                atrasadosMais15Min++;
+                alert("A planilha parece não conter nenhum dado ainda.");
             }
-        });
+        }
 
-        // 1. Média Geral de Atraso (Agendamento x Atendimento)
-        const mediaGeralMinutos = totalAtendidos > 0 ? (somaAtrasoGeral / totalAtendidos) : 0;
-        document.getElementById('media-geral-atraso').innerText = formatarMinutos(mediaGeralMinutos);
+        function parseDateBR(str) {
+            if (!str) return null;
+            const partes = str.split('/');
+            if (partes.length !== 3) return null;
+            return new Date(partes[2], partes[1] - 1, partes[0]);
+        }
 
-        // 2. Percentuais de Atendimento
-        const pctNoHorario = totalAtendidos > 0 ? ((noHorarioOuAdiantados / totalAtendidos) * 100).toFixed(1) : 0;
-        const pctAtrasados = totalAtendidos > 0 ? ((atrasadosMais15Min / totalAtendidos) * 100).toFixed(1) : 0;
-
-        document.getElementById('pct-no-horario').innerText = `${pctNoHorario}%`;
-        document.getElementById('pct-atrasados').innerText = `${pctAtrasados}%`;
-
-        return { noHorarioOuAdiantados, atrasadosMais15Min };
-    }
-
-    // --- PROCESSAMENTO DO GRÁFICO DE FAIXA HORÁRIA ---
-    
-    function processarDadosGraficoFaixa(atendimentos) {
-        const faixas = {}; // Estrutura: { "17:00": { somaTempo: X, qtd: Y } }
-
-        atendimentos.forEach(at => {
-            const faixa = obterFaixa15Min(at.agendado);
-            const agendado = parseHora(at.agendado);
-            const fim = parseHora(at.fimAtendimento); // Média de tempo: agendado x final do atendimento
+        function popularFiltroDeDatas(data) {
+            const select = document.getElementById('filter_date');
+            select.innerHTML = '<option value="ALL">Todas as Datas</option>';
             
-            const diferencaTotal = fim - agendado;
+            const datasUnicas = [...new Set(data.map(item => item["Data Atendimento"]).filter(Boolean))];
+            
+            datasUnicas.sort((a, b) => {
+                const dA = parseDateBR(a);
+                const dB = parseDateBR(b);
+                return (dA && dB) ? dA - dB : 0;
+            });
+            
+            datasUnicas.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d;
+                opt.textContent = d;
+                select.appendChild(opt);
+            });
+        }
 
-            if (!faixas[faixa]) {
-                faixas[faixa] = { somaTempo: 0, qtd: 0 };
+        document.getElementById('filter_date').addEventListener('change', () => {
+            document.getElementById('filter_start_date').value = "";
+            document.getElementById('filter_end_date').value = "";
+            filtrarEAplicarDados();
+        });
+
+        document.getElementById('filter_start_date').addEventListener('change', () => {
+            document.getElementById('filter_date').value = "ALL";
+            filtrarEAplicarDados();
+        });
+
+        document.getElementById('filter_end_date').addEventListener('change', () => {
+            document.getElementById('filter_date').value = "ALL";
+            filtrarEAplicarDados();
+        });
+
+        document.getElementById('btn_clear_period').addEventListener('click', () => {
+            document.getElementById('filter_start_date').value = "";
+            document.getElementById('filter_end_date').value = "";
+            document.getElementById('filter_date').value = "ALL";
+            filtrarEAplicarDados();
+        });
+
+        function filtrarEAplicarDados() {
+            const diaUnico = document.getElementById('filter_date').value;
+            const dataInicioStr = document.getElementById('filter_start_date').value;
+            const dataFimStr = document.getElementById('filter_end_date').value;
+
+            let dadosFiltrados = [...globalRawData];
+
+            if (diaUnico !== "ALL") {
+                dadosFiltrados = globalRawData.filter(item => item["Data Atendimento"] === diaUnico);
+            } else if (dataInicioStr || dataFimStr) {
+                const dataInicio = dataInicioStr ? new Date(dataInicioStr + "T00:00:00") : null;
+                const dataFim = dataFimStr ? new Date(dataFimStr + "T23:59:59") : null;
+
+                dadosFiltrados = globalRawData.filter(item => {
+                    const dataItem = parseDateBR(item["Data Atendimento"]);
+                    if (!dataItem) return false;
+                    if (dataInicio && dataItem < dataInicio) return false;
+                    if (dataFim && dataItem > dataFim) return false;
+                    return true;
+                });
             }
 
-            faixas[faixa].somaTempo += diferencaTotal;
-            faixas[faixa].qtd += 1;
-        });
+            // AJUSTE: Restrição absoluta de horário (09:45 às 18:00)
+            // 09:45 = 585 minutos | 18:00 = 1080 minutos
+            dadosFiltrados = dadosFiltrados.filter(item => {
+                const minutos = timeToMinutes(item["Hora Atendimento"]);
+                if (minutos === null) return false;
+                return minutos >= 585 && minutos <= 1080;
+            });
 
-        const labels = Object.keys(faixas).sort();
-        const valoresMedios = labels.map(faixa => {
-            const dados = faixas[faixa];
-            return (dados.somaTempo / dados.qtd).toFixed(1); // Média em minutos para aquela faixa
-        });
+            atualizarDashboard(dadosFiltrados);
+        }
 
-        return { labels, valoresMedios };
-    }
+        function timeToMinutes(timeStr) {
+            if (!timeStr || !timeStr.includes(':')) return null;
+            const [h, m] = timeStr.split(':').map(Number);
+            if (isNaN(h) || isNaN(m)) return null;
+            return (h * 60) + m;
+        }
 
-    // --- INICIALIZAÇÃO DOS GRÁFICOS ---
-    
-    window.onload = function() {
-        const metricas = processarMétricas(dadosAtendimentos);
-        const dadosFaixa = processarDadosGraficoFaixa(dadosAtendimentos);
+        function minutesToTime(totalMinutes) {
+            const h = String(Math.floor(totalMinutes / 60)).padStart(2, '0');
+            const m = String(totalMinutes % 60).padStart(2, '0');
+            return `${h}:${m}`;
+        }
 
-        // 1. Renderização do Gráfico: Média de Atraso (Agendado x Fim) por Faixa
-        const ctxFaixa = document.getElementById('chartAtrasoFaixa').getContext('2d');
-        new Chart(ctxFaixa, {
-            type: 'bar',
-            data: {
-                labels: dadosFaixa.labels,
-                datasets: [{
-                    label: 'Média de Tempo: Agendamento x Fim (minutos)',
-                    data: dadosFaixa.valoresMedios,
-                    backgroundColor: 'rgba(0, 51, 102, 0.75)',
-                    borderColor: 'rgba(0, 51, 102, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: { display: true, text: 'Minutos' }
-                    },
-                    x: {
-                        title: { display: true, text: 'Faixa Horária (Agendamento)' }
+        function atualizarDashboard(dadosFiltrados) {
+            const totalAtendimentos = dadosFiltrados.length;
+            
+            const registrosComDiferenca = dadosFiltrados.filter(item => {
+                const dif = item["Diferença (Minutos)"];
+                return dif && dif !== "-";
+            });
+
+            let somaAtrasos = 0;
+            let qtdPontuaisOuAdiantados = 0;
+            let qtdAtrasados = 0;
+
+            registrosComDiferenca.forEach(item => {
+                const diff = Number(item["Diferença (Minutos)"]);
+                somaAtrasos += diff;
+                if (diff > 0) {
+                    qtdAtrasados++;
+                } else {
+                    qtdPontuaisOuAdiantados++;
+                }
+            });
+
+            const mediaAtraso = registrosComDiferenca.length > 0 
+                ? (somaAtrasos / registrosComDiferenca.length).toFixed(1) + " min" 
+                : "0 min";
+
+            document.getElementById('kpi_total').textContent = totalAtendimentos;
+            document.getElementById('kpi_media').textContent = mediaAtraso;
+            document.getElementById('kpi_pontuais').textContent = qtdPontuaisOuAdiantados;
+            document.getElementById('kpi_atrasados').textContent = qtdAtrasados;
+
+            gerarGraficosRanges(dadosFiltrados);
+            gerarGraficosDiaSemana(dadosFiltrados);
+        }
+
+        function gerarGraficosRanges(dados) {
+            // Limites rígidos baseados na nova regra (09:45 a 18:00)
+            let minTempo = 585; 
+            let maxTempo = 1080; 
+
+            const minInicio = Math.floor(minTempo / 15) * 15; // 585 (09:45)
+            const minFim = Math.ceil(maxTempo / 15) * 15;    // 1080 (18:00)
+            const intervalo = 15;
+
+            const blocos = [];
+            for (let t = minInicio; t < minFim; t += intervalo) {
+                blocos.push({
+                    inicio: t,
+                    fim: t + intervalo,
+                    label: `${minutesToTime(t)} - ${minutesToTime(t + intervalo)}`,
+                    somaDiferenca: 0,
+                    qtdDiferenca: 0,
+                    qtdTotal: 0
+                });
+            }
+
+            dados.forEach(item => {
+                const minAtend = timeToMinutes(item["Hora Atendimento"]);
+                if (minAtend === null) return;
+
+                const bloco = blocos.find(b => minAtend >= b.inicio && minAtend < b.fim);
+                if (bloco) {
+                    bloco.qtdTotal++;
+                    const diff = item["Diferença (Minutos)"];
+                    if (diff && diff !== "-") {
+                        bloco.somaDiferenca += Number(diff);
+                        bloco.qtdDiferenca++;
                     }
                 }
-            }
-        });
+            });
 
-        // 2. Renderização do Gráfico: Volume por Status (No Horário vs Atrasados)
-        const ctxStatus = document.getElementById('chartStatusAtendimento').getContext('2d');
-        new Chart(ctxStatus, {
-            type: 'pie',
-            data: {
-                labels: ['No Horário / Adiantado (Até 15 min)', 'Com Atraso (>15 min)'],
-                datasets: [{
-                    data: [metricas.noHorarioOuAdiantados, metricas.atrasadosMais15Min],
-                    backgroundColor: ['#28a745', '#dc3545'],
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false
-            }
-        });
-    };
-</script>
+            const labels = blocos.map(b => b.label);
+            const mediasAtraso = blocos.map(b => b.qtdDiferenca > 0 ? (b.somaDiferenca / b.qtdDiferenca).toFixed(1) : 0);
+            const volumesAtendimento = blocos.map(b => b.qtdTotal);
 
+            if (chartAtrasosInstance) chartAtrasosInstance.destroy();
+            if (chartVolumeInstance) chartVolumeInstance.destroy();
+
+            const ctxAtraso = document.getElementById('chart_atrasos').getContext('2d');
+            chartAtrasosInstance = new Chart(ctxAtraso, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Média de Atraso (Minutos)',
+                        data: mediasAtraso,
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#9ca3af' } } },
+                    scales: {
+                        x: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } },
+                        y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } }
+                    }
+                }
+            });
+
+            const ctxVolume = document.getElementById('chart_volume').getContext('2d');
+            chartVolumeInstance = new Chart(ctxVolume, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Volume de Atendimentos',
+                        data: volumesAtendimento,
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#9ca3af' } } },
+                    scales: {
+                        x: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } },
+                        y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } }
+                    }
+                }
+            });
+        }
+
+        function gerarGraficosDiaSemana(dados) {
+            // Contadores de dias (Dom a Sáb)
+            const contagemDias = [0, 0, 0, 0, 0, 0, 0];
+
+            // Blocos de faixas agrupados dentro de 09:45 e 18:00
+            const faixasHorarias = ["09:45-11:30", "11:30-13:15", "13:15-15:00", "15:00-16:45", "16:45-18:00"];
+            
+            // Inicializa estrutura para Segunda (1) a Sexta (5)
+            const contagemFaixaDia = {
+                1: [0, 0, 0, 0, 0], // Segunda
+                2: [0, 0, 0, 0, 0], // Terça
+                3: [0, 0, 0, 0, 0], // Quarta
+                4: [0, 0, 0, 0, 0], // Quinta
+                5: [0, 0, 0, 0, 0]  // Sexta
+            };
+
+            dados.forEach(item => {
+                const dataObj = parseDateBR(item["Data Atendimento"]);
+                if (!dataObj) return;
+
+                const diaSemana = dataObj.getDay(); 
+                contagemDias[diaSemana]++;
+
+                const minutos = timeToMinutes(item["Hora Atendimento"]);
+                if (minutos === null) return;
+
+                let faixaIndex = -1;
+                if (minutos >= 585 && minutos < 690) faixaIndex = 0;       // 09:45 - 11:30
+                else if (minutos >= 690 && minutos < 795) faixaIndex = 1;  // 11:30 - 13:15
+                else if (minutos >= 795 && minutos < 900) faixaIndex = 2;  // 13:15 - 15:00
+                else if (minutos >= 900 && minutos < 1005) faixaIndex = 3; // 15:00 - 16:45
+                else if (minutos >= 1005 && minutos <= 1080) faixaIndex = 4; // 16:45 - 18:00
+
+                // Filtra apenas Segunda (1) a Sexta (5)
+                if (faixaIndex !== -1 && diaSemana >= 1 && diaSemana <= 5) {
+                    contagemFaixaDia[diaSemana][faixaIndex]++;
+                }
+            });
+
+            // AJUSTE: Exibe estritamente Segunda a Sexta (remove Sábado e Domingo)
+            const diasFiltroLabels = DIAS_NOME.slice(1, 6); // ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"]
+            const dadosFiltroValores = contagemDias.slice(1, 6);
+
+            if (chartDiaSemanaInstance) chartDiaSemanaInstance.destroy();
+            if (chartFaixaDiaSemanaInstance) chartFaixaDiaSemanaInstance.destroy();
+
+            // Renderiza Gráfico 3 (Atendimentos por Dia da Semana)
+            const ctxDiaSemana = document.getElementById('chart_dia_semana').getContext('2d');
+            chartDiaSemanaInstance = new Chart(ctxDiaSemana, {
+                type: 'doughnut',
+                data: {
+                    labels: diasFiltroLabels,
+                    datasets: [{
+                        data: dadosFiltroValores,
+                        backgroundColor: [
+                            '#3b82f6', // Segunda - Azul
+                            '#10b981', // Terça - Verde
+                            '#f59e0b', // Quarta - Amarelo
+                            '#ec4899', // Quinta - Rosa
+                            '#8b5cf6'  // Sexta - Roxo
+                        ],
+                        borderWidth: 1,
+                        borderColor: '#1f2937'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { color: '#9ca3af' }
+                        }
+                    }
+                }
+            });
+
+            // Renderiza Gráfico 4 (Segunda a Sexta mapeados de ponta a ponta)
+            const ctxFaixaDiaSemana = document.getElementById('chart_faixa_dia_semana').getContext('2d');
+            chartFaixaDiaSemanaInstance = new Chart(ctxFaixaDiaSemana, {
+                type: 'line',
+                data: {
+                    labels: faixasHorarias,
+                    datasets: [
+                        {
+                            label: 'Segunda-feira',
+                            data: contagemFaixaDia[1],
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'transparent',
+                            tension: 0.2
+                        },
+                        {
+                            label: 'Terça-feira',
+                            data: contagemFaixaDia[2],
+                            borderColor: '#10b981',
+                            backgroundColor: 'transparent',
+                            tension: 0.2
+                        },
+                        {
+                            label: 'Quarta-feira',
+                            data: contagemFaixaDia[3],
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'transparent',
+                            tension: 0.2
+                        },
+                        {
+                            label: 'Quinta-feira',
+                            data: contagemFaixaDia[4],
+                            borderColor: '#ec4899',
+                            backgroundColor: 'transparent',
+                            tension: 0.2
+                        },
+                        {
+                            label: 'Sexta-feira',
+                            data: contagemFaixaDia[5],
+                            borderColor: '#8b5cf6',
+                            backgroundColor: 'transparent',
+                            tension: 0.2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { color: '#9ca3af', boxWidth: 12 }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } },
+                        y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } }
+                    }
+                }
+            });
+        }
+    </script>
 </body>
 </html>

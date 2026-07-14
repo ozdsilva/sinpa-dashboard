@@ -50,6 +50,36 @@
             </div>
         </div>
 
+        <!-- FILTROS DE DATA (ESTILO CARD DE CONTROLE) -->
+        <div class="bg-gray-800 p-5 rounded-lg border border-gray-700 space-y-4">
+            <h3 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">Painel de Filtros Globais</h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Filtro de Dia Único -->
+                <div class="flex flex-col gap-1.5">
+                    <label for="filter_date" class="text-xs font-medium text-gray-400">Filtrar por Dia Único:</label>
+                    <select id="filter_date" class="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full">
+                        <option value="ALL">Todas as Datas</option>
+                    </select>
+                </div>
+
+                <!-- Filtro de Intervalo (Início) -->
+                <div class="flex flex-col gap-1.5">
+                    <label for="filter_start_date" class="text-xs font-medium text-gray-400">Data Inicial (Período):</label>
+                    <input type="date" id="filter_start_date" class="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full">
+                </div>
+
+                <!-- Filtro de Intervalo (Fim) -->
+                <div class="flex flex-col gap-1.5 flex-1">
+                    <label for="filter_end_date" class="text-xs font-medium text-gray-400">Data Final (Período):</label>
+                    <div class="flex gap-2">
+                        <input type="date" id="filter_end_date" class="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full">
+                        <button id="btn_clear_period" class="bg-gray-600 hover:bg-gray-500 text-white font-semibold px-3 rounded text-sm transition-all">Limpar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- CARDS DE METRICAS PRINCIPAIS -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
@@ -70,15 +100,7 @@
             </div>
         </div>
 
-        <!-- FILTRO DE DATAS -->
-        <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 flex items-center gap-4">
-            <label for="filter_date" class="text-sm font-medium text-gray-300">Filtrar por Data de Atendimento:</label>
-            <select id="filter_date" class="bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="ALL">Todas as Datas</option>
-            </select>
-        </div>
-
-        <!-- GRÁFICOS -->
+        <!-- GRÁFICOS - PARTE 1 -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- Gráfico de Linha: Média de Atraso por Range -->
             <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
@@ -97,12 +119,36 @@
             </div>
         </div>
 
+        <!-- GRÁFICOS - PARTE 2 (NOVOS GRÁFICOS DE ANÁLISE POR DIA DA SEMANA) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Gráfico de Pizza/Donut: Quantidade de atendimentos por Dia da Semana -->
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                <h3 class="text-lg font-bold text-white mb-4">Atendimentos por Dia da Semana</h3>
+                <div class="h-80 relative">
+                    <canvas id="chart_dia_semana"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráfico de Linhas Múltiplas: Faixas Horárias mais críticas por Dia da Semana -->
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                <h3 class="text-lg font-bold text-white mb-4">Volume por Faixa Horária x Dia da Semana</h3>
+                <div class="h-80 relative">
+                    <canvas id="chart_faixa_dia_semana"></canvas>
+                </div>
+            </div>
+        </div>
+
     </main>
 
     <script>
         let globalRawData = [];
         let chartAtrasosInstance = null;
         let chartVolumeInstance = null;
+        let chartDiaSemanaInstance = null;
+        let chartFaixaDiaSemanaInstance = null;
+
+        // Dias da semana constantes
+        const DIAS_NOME = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
 
         // Recupera URL salva no navegador para comodidade
         const savedUrl = localStorage.getItem('sinpa_saved_csv_url');
@@ -124,10 +170,8 @@
         });
 
         function carregarDados(url) {
-            // Ajusta o link para garantir que ele passe sem bloqueios e sem cache
             let finalUrl = url;
             if (url.includes('pub?output=csv')) {
-                // Força o formato correto de exportação direta do Google
                 finalUrl = url.replace('pub?output=csv', 'pub?gid=0&single=true&output=csv');
             }
             
@@ -138,7 +182,6 @@
                 header: true,
                 skipEmptyLines: true,
                 complete: function(results) {
-                    // Verifica se o resultado veio vazio ou com erro estrutural
                     if (!results.data || results.data.length === 0 || !results.data[0]["Data Atendimento"]) {
                         console.log("Tentando leitura alternativa por falha de cabeçalho...");
                         tentarLeituraAlternativa(results.data);
@@ -146,7 +189,7 @@
                     }
                     globalRawData = results.data;
                     popularFiltroDeDatas(globalRawData);
-                    atualizarDashboard("ALL");
+                    filtrarEAplicarDados();
                 },
                 error: function(err) {
                     alert("Erro ao ler os dados da planilha. Verifique se publicou corretamente como CSV.");
@@ -155,10 +198,8 @@
             });
         }
 
-        // Função extra para garantir a leitura mesmo se o Google mudar a ordem das colunas
         function tentarLeituraAlternativa(data) {
             if (data && data.length > 0) {
-                // Força mapeamento manual se as chaves vierem ligeiramente diferentes
                 globalRawData = data.map(row => {
                     const chaves = Object.keys(row);
                     return {
@@ -173,18 +214,30 @@
                     };
                 });
                 popularFiltroDeDatas(globalRawData);
-                atualizarDashboard("ALL");
+                filtrarEAplicarDados();
             } else {
                 alert("A planilha parece não conter nenhum dado ainda.");
             }
+        }
+
+        function parseDateBR(str) {
+            if (!str) return null;
+            const partes = str.split('/');
+            if (partes.length !== 3) return null;
+            return new Date(partes[2], partes[1] - 1, partes[0]);
         }
 
         function popularFiltroDeDatas(data) {
             const select = document.getElementById('filter_date');
             select.innerHTML = '<option value="ALL">Todas as Datas</option>';
             
-            // Filtra datas únicas
-            const datasUnicas = [...new Set(data.map(item => item["Data Atendimento"]).filter(Boolean))].sort();
+            const datasUnicas = [...new Set(data.map(item => item["Data Atendimento"]).filter(Boolean))];
+            
+            datasUnicas.sort((a, b) => {
+                const dA = parseDateBR(a);
+                const dB = parseDateBR(b);
+                return (dA && dB) ? dA - dB : 0;
+            });
             
             datasUnicas.forEach(d => {
                 const opt = document.createElement('option');
@@ -194,9 +247,59 @@
             });
         }
 
-        document.getElementById('filter_date').addEventListener('change', (e) => {
-            atualizarDashboard(e.target.value);
+        // CONTROLADORES DOS FILTROS DINÂMICOS (UNIFICADOS)
+        document.getElementById('filter_date').addEventListener('change', () => {
+            // Se o usuário escolher um dia único, limpamos o filtro de período para não bugar
+            document.getElementById('filter_start_date').value = "";
+            document.getElementById('filter_end_date').value = "";
+            filtrarEAplicarDados();
         });
+
+        document.getElementById('filter_start_date').addEventListener('change', () => {
+            document.getElementById('filter_date').value = "ALL";
+            filtrarEAplicarDados();
+        });
+
+        document.getElementById('filter_end_date').addEventListener('change', () => {
+            document.getElementById('filter_date').value = "ALL";
+            filtrarEAplicarDados();
+        });
+
+        document.getElementById('btn_clear_period').addEventListener('click', () => {
+            document.getElementById('filter_start_date').value = "";
+            document.getElementById('filter_end_date').value = "";
+            document.getElementById('filter_date').value = "ALL";
+            filtrarEAplicarDados();
+        });
+
+        // FILTRA E DIRECIONA O FLUXO DE DADOS GLOBAL
+        function filtrarEAplicarDados() {
+            const diaUnico = document.getElementById('filter_date').value;
+            const dataInicioStr = document.getElementById('filter_start_date').value;
+            const dataFimStr = document.getElementById('filter_end_date').value;
+
+            let dadosFiltrados = [...globalRawData];
+
+            if (diaUnico !== "ALL") {
+                // Filtro por dia selecionado
+                dadosFiltrados = globalRawData.filter(item => item["Data Atendimento"] === diaUnico);
+            } else if (dataInicioStr || dataFimStr) {
+                // Filtro por Intervalo de datas
+                const dataInicio = dataInicioStr ? new Date(dataInicioStr + "T00:00:00") : null;
+                const dataFim = dataFimStr ? new Date(dataFimStr + "T23:59:59") : null;
+
+                dadosFiltrados = globalRawData.filter(item => {
+                    const dataItem = parseDateBR(item["Data Atendimento"]);
+                    if (!dataItem) return false;
+                    
+                    if (dataInicio && dataItem < dataInicio) return false;
+                    if (dataFim && dataItem > dataFim) return false;
+                    return true;
+                });
+            }
+
+            atualizarDashboard(dadosFiltrados);
+        }
 
         function timeToMinutes(timeStr) {
             if (!timeStr || !timeStr.includes(':')) return null;
@@ -211,16 +314,10 @@
             return `${h}:${m}`;
         }
 
-        function atualizarDashboard(dataSelecionada) {
-            // Filtra os dados pela data selecionada
-            const dadosFiltrados = dataSelecionada === "ALL" 
-                ? globalRawData 
-                : globalRawData.filter(item => item["Data Atendimento"] === dataSelecionada);
-
-            // Cálculos para os Cards de KPI
+        // ATUALIZA OS ATENDIMENTOS E RE-RENDERIZA OS GRÁFICOS
+        function atualizarDashboard(dadosFiltrados) {
             const totalAtendimentos = dadosFiltrados.length;
             
-            // Filtra apenas registros com diferença válida (numérica)
             const registrosComDiferenca = dadosFiltrados.filter(item => {
                 const dif = item["Diferença (Minutos)"];
                 return dif && dif !== "-";
@@ -244,14 +341,13 @@
                 ? (somaAtrasos / registrosComDiferenca.length).toFixed(1) + " min" 
                 : "0 min";
 
-            // Atualiza o DOM
             document.getElementById('kpi_total').textContent = totalAtendimentos;
             document.getElementById('kpi_media').textContent = mediaAtraso;
             document.getElementById('kpi_pontuais').textContent = qtdPontuaisOuAdiantados;
             document.getElementById('kpi_atrasados').textContent = qtdAtrasados;
 
-            // Compilar dados de 15 em 15 minutos de forma dinâmica baseada no menor e maior horário
             gerarGraficosRanges(dadosFiltrados);
+            gerarGraficosDiaSemana(dadosFiltrados);
         }
 
         function gerarGraficosRanges(dados) {
@@ -273,7 +369,6 @@
                 maxTempo = timeToMinutes("18:00");
             }
 
-            // Arredonda limites para faixas exatas de 15 min
             const minInicio = Math.floor(minTempo / 15) * 15;
             const minFim = Math.ceil(maxTempo / 15) * 15;
             const intervalo = 15;
@@ -290,7 +385,6 @@
                 });
             }
 
-            // Distribui os atendimentos nos blocos
             dados.forEach(item => {
                 const minAtend = timeToMinutes(item["Hora Atendimento"]);
                 if (minAtend === null) return;
@@ -306,16 +400,13 @@
                 }
             });
 
-            // Prepara arrays para os gráficos
             const labels = blocos.map(b => b.label);
             const mediasAtraso = blocos.map(b => b.qtdDiferenca > 0 ? (b.somaDiferenca / b.qtdDiferenca).toFixed(1) : 0);
             const volumesAtendimento = blocos.map(b => b.qtdTotal);
 
-            // Destrói instâncias anteriores se existirem para redesenhar limpo
             if (chartAtrasosInstance) chartAtrasosInstance.destroy();
             if (chartVolumeInstance) chartVolumeInstance.destroy();
 
-            // Renderiza Gráfico 1: Médias de Atraso
             const ctxAtraso = document.getElementById('chart_atrasos').getContext('2d');
             chartAtrasosInstance = new Chart(ctxAtraso, {
                 type: 'line',
@@ -334,9 +425,7 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { labels: { color: '#9ca3af' } }
-                    },
+                    plugins: { legend: { labels: { color: '#9ca3af' } } },
                     scales: {
                         x: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } },
                         y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } }
@@ -344,7 +433,6 @@
                 }
             });
 
-            // Renderiza Gráfico 2: Volume de Atendimentos
             const ctxVolume = document.getElementById('chart_volume').getContext('2d');
             chartVolumeInstance = new Chart(ctxVolume, {
                 type: 'bar',
@@ -360,8 +448,131 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#9ca3af' } } },
+                    scales: {
+                        x: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } },
+                        y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } }
+                    }
+                }
+            });
+        }
+
+        // GERA OS DOIS NOVOS GRÁFICOS DE DIA DA SEMANA
+        function gerarGraficosDiaSemana(dados) {
+            // Contadores por dia da semana [Dom, Seg, Ter, Qua, Qui, Sex, Sab]
+            const contagemDias = [0, 0, 0, 0, 0, 0, 0];
+
+            // Estrutura para os blocos agrupados por dia da semana e faixa horária (de 1 hora)
+            const faixasHorarias = ["08:00-10:00", "10:00-12:00", "12:00-14:00", "14:00-16:00", "16:00-18:00"];
+            const contagemFaixaDia = {
+                1: [0, 0, 0, 0, 0], // Segunda
+                2: [0, 0, 0, 0, 0], // Terça
+                3: [0, 0, 0, 0, 0], // Quarta
+                4: [0, 0, 0, 0, 0], // Quinta
+                5: [0, 0, 0, 0, 0], // Sexta
+                6: [0, 0, 0, 0, 0]  // Sábado
+            };
+
+            dados.forEach(item => {
+                const dataObj = parseDateBR(item["Data Atendimento"]);
+                if (!dataObj) return;
+
+                const diaSemana = dataObj.getDay(); // 0 a 6
+                contagemDias[diaSemana]++;
+
+                const minutos = timeToMinutes(item["Hora Atendimento"]);
+                if (minutos === null) return;
+
+                // Mapeia para faixas horárias agrupadas (de duas em duas horas)
+                let faixaIndex = -1;
+                if (minutos >= 480 && minutos < 600) faixaIndex = 0; // 08:00 - 10:00
+                else if (minutos >= 600 && minutos < 720) faixaIndex = 1; // 10:00 - 12:00
+                else if (minutos >= 720 && minutos < 840) faixaIndex = 2; // 12:00 - 14:00
+                else if (minutos >= 840 && minutos < 960) faixaIndex = 3; // 14:00 - 16:00
+                else if (minutos >= 960 && minutos < 1080) faixaIndex = 4; // 16:00 - 18:00
+
+                if (faixaIndex !== -1 && diaSemana >= 1 && diaSemana <= 6) {
+                    contagemFaixaDia[diaSemana][faixaIndex]++;
+                }
+            });
+
+            // Filtramos Domingo pois o posto normalmente não abre aos Domingos
+            const diasFiltroLabels = DIAS_NOME.slice(1, 7); // Segunda a Sábado
+            const dadosFiltroValores = contagemDias.slice(1, 7);
+
+            if (chartDiaSemanaInstance) chartDiaSemanaInstance.destroy();
+            if (chartFaixaDiaSemanaInstance) chartFaixaDiaSemanaInstance.destroy();
+
+            // Renderiza Novo Gráfico 3: Atendimentos por Dia da Semana (Donut)
+            const ctxDiaSemana = document.getElementById('chart_dia_semana').getContext('2d');
+            chartDiaSemanaInstance = new Chart(ctxDiaSemana, {
+                type: 'doughnut',
+                data: {
+                    labels: diasFiltroLabels,
+                    datasets: [{
+                        data: dadosFiltroValores,
+                        backgroundColor: [
+                            '#3b82f6', // Segunda - Azul
+                            '#10b981', // Terça - Verde
+                            '#f59e0b', // Quarta - Amarelo
+                            '#ec4899', // Quinta - Rosa
+                            '#8b5cf6', // Sexta - Roxo
+                            '#6b7280'  // Sábado - Cinza
+                        ],
+                        borderWidth: 1,
+                        borderColor: '#1f2937'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
                     plugins: {
-                        legend: { labels: { color: '#9ca3af' } }
+                        legend: {
+                            position: 'right',
+                            labels: { color: '#9ca3af' }
+                        }
+                    }
+                }
+            });
+
+            // Renderiza Novo Gráfico 4: Volume por Faixa Horária x Dia da Semana (Linhas Múltiplas)
+            const ctxFaixaDiaSemana = document.getElementById('chart_faixa_dia_semana').getContext('2d');
+            chartFaixaDiaSemanaInstance = new Chart(ctxFaixaDiaSemana, {
+                type: 'line',
+                data: {
+                    labels: faixasHorarias,
+                    datasets: [
+                        {
+                            label: 'Segunda-feira',
+                            data: contagemFaixaDia[1],
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'transparent',
+                            tension: 0.2
+                        },
+                        {
+                            label: 'Quarta-feira',
+                            data: contagemFaixaDia[3],
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'transparent',
+                            tension: 0.2
+                        },
+                        {
+                            label: 'Sexta-feira',
+                            data: contagemFaixaDia[5],
+                            borderColor: '#8b5cf6',
+                            backgroundColor: 'transparent',
+                            tension: 0.2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { color: '#9ca3af', boxWidth: 12 }
+                        }
                     },
                     scales: {
                         x: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } },

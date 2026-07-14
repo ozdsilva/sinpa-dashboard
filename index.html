@@ -98,6 +98,7 @@
             </div>
             <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
                 <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Atendimentos com Atraso</p>
+                <p class="text-xs font-medium text-gray-400">Com mais de 15 minutos entre a recepção e o final do atendimento.</p>
                 <!-- Atendidos com mais de 15 min de atraso (Regra de Negócio Mantida para este KPI) -->
                 <p id="kpi_atrasados" class="text-3xl font-bold text-red-400 mt-2">-</p>
             </div>
@@ -463,7 +464,7 @@
                 data: {
                     labels: labelsGraficoIntradia,
                     datasets: [{
-                        label: 'Média de Atraso Bruta (minutos)',
+                        label: 'Média de Agendamento X Atendimento (minutos)',
                         data: mediasAtrasoReais,
                         borderColor: '#ef4444', // Vermelho (Tailwind - red-500)
                         backgroundColor: 'rgba(239, 68, 68, 0.1)',

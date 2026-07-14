@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Atendimentos - SINPA</title>
+    <!-- Tailwind CSS para estilização -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js para os gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- PapaParse para ler o CSV do Google Sheets de forma robusta -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans min-h-screen">
+
+    <!-- BARRA SUPERIOR -->
+    <header class="bg-gray-800 border-b border-gray-700 py-4 px-6 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <span class="text-3xl">📊</span>
+                <div>
+                    <h1 class="text-xl font-bold text-white tracking-wide">SINPA Analytics</h1>
+                    <p class="text-xs text-gray-400">Dashboard de Performance e Atrasos</p>
+                </div>
+            </div>
+            
+            <!-- Entrada do Link do Google Sheets -->
+            <div class="flex w-full md:w-auto items-center gap-2">
+                <input type="text" id="csv_url_input" placeholder="Cole aqui o link do CSV Publicado na Web" 
+                       class="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-96">
+                <button id="btn_load" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded text-sm transition-all whitespace-nowrap">
+                    Atualizar Dados
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-6 space-y-6">
+
+        <!-- ALERTA DE CONFIGURAÇÃO INICIAL -->
+        <div id="setup_alert" class="bg-blue-900/40 border border-blue-700 text-blue-200 p-4 rounded-lg flex items-start gap-3">
+            <span class="text-xl">💡</span>
+            <div>
+                <h3 class="font-bold">Como conectar sua planilha do Google:</h3>
+                <ol class="list-decimal ml-5 mt-1 text-sm text-gray-300 space-y-1">
+                    <li>Na sua Google Planilha, clique em <strong>Arquivo</strong> > <strong>Compartilhar</strong> > <strong>Publicar na Web</strong>.</li>
+                    <li>Mude de "Página Web" para <strong>Valores separados por vírgula (.csv)</strong>.</li>
+                    <li>Clique em <strong>Publicar</strong>, copie o link gerado e cole no campo acima!</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- CARDS DE METRICAS PRINCIPAIS -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Total de Atendimentos</p>
+                <p id="kpi_total" class="text-3xl font-bold text-white mt-2">-</p>
+            </div>
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Média Geral de Atraso</p>
+                <p id="kpi_media" class="text-3xl font-bold text-white mt-2">-</p>
+            </div>
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">No Horário ou Adiantados</p>
+                <p id="kpi_pontuais" class="text-3xl font-bold text-green-400 mt-2">-</p>
+            </div>
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                <p class="text-gray-400 text-xs font-semibold uppercase tracking-wider">Atendimentos com Atraso</p>
+                <p id="kpi_atrasados" class="text-3xl font-bold text-red-400 mt-2">-</p>
+            </div>
+        </div>
+
+        <!-- FILTRO DE DATAS -->
+        <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 flex items-center gap-4">
+            <label for="filter_date" class="text-sm font-medium text-gray-300">Filtrar por Data de Atendimento:</label>
+            <select id="filter_date" class="bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="ALL">Todas as Datas</option>
+            </select>
+        </div>
+
+        <!-- GRÁFICOS -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Gráfico de Linha: Média de Atraso por Range -->
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                <h3 class="text-lg font-bold text-white mb-4">Média de Atraso por Faixa Horária (15 min)</h3>
+                <div class="h-80 relative">
+                    <canvas id="chart_atrasos"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráfico de Barras: Volume de Atendimentos por Range -->
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                <h3 class="text-lg font-bold text-white mb-4">Volume de Atendimentos por Faixa Horária</h3>
+                <div class="h-80 relative">
+                    <canvas id="chart_volume"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        let globalRawData = [];
+        let chartAtrasosInstance = null;
+        let chartVolumeInstance = null;
+
+        // Recupera URL salva no navegador para comodidade
+        const savedUrl = localStorage.getItem('sinpa_saved_csv_url');
+        if (savedUrl) {
+            document.getElementById('csv_url_input').value = savedUrl;
+            document.getElementById('setup_alert').classList.add('hidden');
+            carregarDados(savedUrl);
+        }
+
+        document.getElementById('btn_load').addEventListener('click', () => {
+            const url = document.getElementById('csv_url_input').value.trim();
+            if (!url) {
+                alert("Por favor, cole um link válido.");
+                return;
+            }
+            localStorage.setItem('sinpa_saved_csv_url', url);
+            document.getElementById('setup_alert').classList.add('hidden');
+            carregarDados(url);
+        });
+
+        function carregarDados(url) {
+            // Ajusta o link para garantir que ele passe sem bloqueios e sem cache
+            let finalUrl = url;
+            if (url.includes('pub?output=csv')) {
+                // Força o formato correto de exportação direta do Google
+                finalUrl = url.replace('pub?output=csv', 'pub?gid=0&single=true&output=csv');
+            }
+            
+            const cacheBusterUrl = finalUrl + (finalUrl.includes('?') ? '&' : '?') + 't=' + new Date().getTime();
+
+            Papa.parse(cacheBusterUrl, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    // Verifica se o resultado veio vazio ou com erro estrutural
+                    if (!results.data || results.data.length === 0 || !results.data[0]["Data Atendimento"]) {
+                        console.log("Tentando leitura alternativa por falha de cabeçalho...");
+                        tentarLeituraAlternativa(results.data);
+                        return;
+                    }
+                    globalRawData = results.data;
+                    popularFiltroDeDatas(globalRawData);
+                    atualizarDashboard("ALL");
+                },
+                error: function(err) {
+                    alert("Erro ao ler os dados da planilha. Verifique se publicou corretamente como CSV.");
+                    console.error(err);
+                }
+            });
+        }
+
+        // Função extra para garantir a leitura mesmo se o Google mudar a ordem das colunas
+        function tentarLeituraAlternativa(data) {
+            if (data && data.length > 0) {
+                // Força mapeamento manual se as chaves vierem ligeiramente diferentes
+                globalRawData = data.map(row => {
+                    const chaves = Object.keys(row);
+                    return {
+                        "Nome": row[chaves[0]] || "",
+                        "Data Atendimento": row[chaves[1]] || "",
+                        "Hora Atendimento": row[chaves[2]] || "",
+                        "Protocolo": row[chaves[3]] || "",
+                        "Data Agendamento": row[chaves[4]] || "",
+                        "Hora Agendamento": row[chaves[5]] || "",
+                        "Status": row[chaves[6]] || "",
+                        "Diferença (Minutos)": row[chaves[7]] || "-"
+                    };
+                });
+                popularFiltroDeDatas(globalRawData);
+                atualizarDashboard("ALL");
+            } else {
+                alert("A planilha parece não conter nenhum dado ainda.");
+            }
+        }
+
+        function popularFiltroDeDatas(data) {
+            const select = document.getElementById('filter_date');
+            select.innerHTML = '<option value="ALL">Todas as Datas</option>';
+            
+            // Filtra datas únicas
+            const datasUnicas = [...new Set(data.map(item => item["Data Atendimento"]).filter(Boolean))].sort();
+            
+            datasUnicas.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d;
+                opt.textContent = d;
+                select.appendChild(opt);
+            });
+        }
+
+        document.getElementById('filter_date').addEventListener('change', (e) => {
+            atualizarDashboard(e.target.value);
+        });
+
+        function timeToMinutes(timeStr) {
+            if (!timeStr || !timeStr.includes(':')) return null;
+            const [h, m] = timeStr.split(':').map(Number);
+            if (isNaN(h) || isNaN(m)) return null;
+            return (h * 60) + m;
+        }
+
+        function minutesToTime(totalMinutes) {
+            const h = String(Math.floor(totalMinutes / 60)).padStart(2, '0');
+            const m = String(totalMinutes % 60).padStart(2, '0');
+            return `${h}:${m}`;
+        }
+
+        function atualizarDashboard(dataSelecionada) {
+            // Filtra os dados pela data selecionada
+            const dadosFiltrados = dataSelecionada === "ALL" 
+                ? globalRawData 
+                : globalRawData.filter(item => item["Data Atendimento"] === dataSelecionada);
+
+            // Cálculos para os Cards de KPI
+            const totalAtendimentos = dadosFiltrados.length;
+            
+            // Filtra apenas registros com diferença válida (numérica)
+            const registrosComDiferenca = dadosFiltrados.filter(item => {
+                const dif = item["Diferença (Minutos)"];
+                return dif && dif !== "-";
+            });
+
+            let somaAtrasos = 0;
+            let qtdPontuaisOuAdiantados = 0;
+            let qtdAtrasados = 0;
+
+            registrosComDiferenca.forEach(item => {
+                const diff = Number(item["Diferença (Minutos)"]);
+                somaAtrasos += diff;
+                if (diff > 0) {
+                    qtdAtrasados++;
+                } else {
+                    qtdPontuaisOuAdiantados++;
+                }
+            });
+
+            const mediaAtraso = registrosComDiferenca.length > 0 
+                ? (somaAtrasos / registrosComDiferenca.length).toFixed(1) + " min" 
+                : "0 min";
+
+            // Atualiza o DOM
+            document.getElementById('kpi_total').textContent = totalAtendimentos;
+            document.getElementById('kpi_media').textContent = mediaAtraso;
+            document.getElementById('kpi_pontuais').textContent = qtdPontuaisOuAdiantados;
+            document.getElementById('kpi_atrasados').textContent = qtdAtrasados;
+
+            // Compilar dados de 15 em 15 minutos de forma dinâmica baseada no menor e maior horário
+            gerarGraficosRanges(dadosFiltrados);
+        }
+
+        function gerarGraficosRanges(dados) {
+            let minTempo = 1440;
+            let maxTempo = 0;
+            let validos = 0;
+
+            dados.forEach(item => {
+                const t = timeToMinutes(item["Hora Atendimento"]);
+                if (t !== null) {
+                    if (t < minTempo) minTempo = t;
+                    if (t > maxTempo) maxTempo = t;
+                    validos++;
+                }
+            });
+
+            if (validos === 0) {
+                minTempo = timeToMinutes("08:00");
+                maxTempo = timeToMinutes("18:00");
+            }
+
+            // Arredonda limites para faixas exatas de 15 min
+            const minInicio = Math.floor(minTempo / 15) * 15;
+            const minFim = Math.ceil(maxTempo / 15) * 15;
+            const intervalo = 15;
+
+            const blocos = [];
+            for (let t = minInicio; t < minFim; t += intervalo) {
+                blocos.push({
+                    inicio: t,
+                    fim: t + intervalo,
+                    label: `${minutesToTime(t)} - ${minutesToTime(t + intervalo)}`,
+                    somaDiferenca: 0,
+                    qtdDiferenca: 0,
+                    qtdTotal: 0
+                });
+            }
+
+            // Distribui os atendimentos nos blocos
+            dados.forEach(item => {
+                const minAtend = timeToMinutes(item["Hora Atendimento"]);
+                if (minAtend === null) return;
+
+                const bloco = blocos.find(b => minAtend >= b.inicio && minAtend < b.fim);
+                if (bloco) {
+                    bloco.qtdTotal++;
+                    const diff = item["Diferença (Minutos)"];
+                    if (diff && diff !== "-") {
+                        bloco.somaDiferenca += Number(diff);
+                        bloco.qtdDiferenca++;
+                    }
+                }
+            });
+
+            // Prepara arrays para os gráficos
+            const labels = blocos.map(b => b.label);
+            const mediasAtraso = blocos.map(b => b.qtdDiferenca > 0 ? (b.somaDiferenca / b.qtdDiferenca).toFixed(1) : 0);
+            const volumesAtendimento = blocos.map(b => b.qtdTotal);
+
+            // Destrói instâncias anteriores se existirem para redesenhar limpo
+            if (chartAtrasosInstance) chartAtrasosInstance.destroy();
+            if (chartVolumeInstance) chartVolumeInstance.destroy();
+
+            // Renderiza Gráfico 1: Médias de Atraso
+            const ctxAtraso = document.getElementById('chart_atrasos').getContext('2d');
+            chartAtrasosInstance = new Chart(ctxAtraso, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Média de Atraso (Minutos)',
+                        data: mediasAtraso,
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#9ca3af' } }
+                    },
+                    scales: {
+                        x: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } },
+                        y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } }
+                    }
+                }
+            });
+
+            // Renderiza Gráfico 2: Volume de Atendimentos
+            const ctxVolume = document.getElementById('chart_volume').getContext('2d');
+            chartVolumeInstance = new Chart(ctxVolume, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Volume de Atendimentos',
+                        data: volumesAtendimento,
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#9ca3af' } }
+                    },
+                    scales: {
+                        x: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } },
+                        y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>

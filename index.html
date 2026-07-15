@@ -101,16 +101,6 @@
             </div>
         </div>
 
-        <!-- NOVO GRÁFICO: MÉDIA POR DIA (LARGURA TOTAL) -->
-        <div class="grid grid-cols-1">
-            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
-                <h3 class="text-lg font-bold text-white mb-4">Média do Tempo de Agendamento X Atendimento por Dia</h3>
-                <div class="h-80 relative">
-                    <canvas id="chart_media_diaria"></canvas>
-                </div>
-            </div>
-        </div>
-
         <!-- SEÇÃO DE GRÁFICOS - LINHA E BARRA (ANÁLISE INTRADIA) -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- Gráfico de Linha: Média de Tempo Horário Agendado x Final do Atendimento -->
@@ -130,6 +120,16 @@
             </div>
         </div>
 
+        <!-- NOVO GRÁFICO: MÉDIA POR DIA (LARGURA TOTAL) -->
+        <div class="grid grid-cols-1">
+            <div class="bg-gray-800 p-5 rounded-lg border border-gray-700">
+                <h3 class="text-lg font-bold text-white mb-4">Média do Tempo de Agendamento X Atendimento por Dia</h3>
+                <div class="h-80 relative">
+                    <canvas id="chart_media_diaria"></canvas>
+                </div>
+            </div>
+        </div>
+        
         <!-- SEÇÃO DE GRÁFICOS - PIZZA E LINHAS MÚLTIPLAS (ANÁLISE SEMANAL) -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- Gráfico de Pizza/Donut: Atendimentos por Dia da Semana (Seg a Sex) -->
